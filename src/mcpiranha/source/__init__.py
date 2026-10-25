@@ -87,9 +87,12 @@ def analyze_files(files: Iterator[tuple[str, bytes]], root: str, *,
     def keep(found: list[SourceHit]) -> None:
         for h in found:
             key = (h.kind, h.detail)  # one hit per distinct thing (bundles repeat code)
-            if key not in seen and len(hits) < MAX_HITS:
+            if key not in seen:
                 seen.add(key)
-                hits.append(h)
+                if len(hits) < MAX_HITS:
+                    hits.append(h)
+                elif (reason := f"Source finding limit ({MAX_HITS}) reached") not in skipped:
+                    skipped.append(reason)
 
     try:
         for path, data in files:
@@ -113,8 +116,8 @@ def analyze_files(files: Iterator[tuple[str, bytes]], root: str, *,
     except SourceLimit as exc:
         skipped.append(str(exc))
     if taint:  # taint crosses files: a handler in index.js, the exec in tools/run.js
-        keep(taint_python.analyze_package(py_files))
-        keep(taint_javascript.analyze_package(js_files))
+        keep(taint_python.analyze_package(py_files, skipped=skipped))
+        keep(taint_javascript.analyze_package(js_files, skipped=skipped))
     language = "py" if languages == {"py"} else "ts" if "ts" in languages else (
         "js" if languages else "other")  # fmt: skip
     return SourceTree(root=root, language=language, files=count, skipped=skipped, hits=hits)
@@ -306,6 +309,10 @@ async def collect(
         async with anyio.create_task_group() as group:
             for i, snapshot in enumerate(snapshots):
                 group.start_soon(one, i, snapshot)
+    for snapshot in out:
+        check = summarize(snapshot)["source"]
+        if snapshot.source is not None and check.status == "partial":
+            warnings.append(f"{snapshot.name}: source analysis incomplete: {check.reason}")
     return out, warnings
 
 
@@ -426,7 +433,10 @@ async def _with_dependencies(
         skipped.append(
             f"dependencies: stopped downloading after {MAX_DEPENDENCY_BYTES // 2**20} MB"
         )
-    unique = list({(h.kind, h.file, h.detail): h for h in hits}.values())[:MAX_HITS_WITH_DEPS]
+    distinct = list({(h.kind, h.file, h.detail): h for h in hits}.values())
+    if len(distinct) > MAX_HITS_WITH_DEPS:
+        skipped.append(f"Dependency source finding limit ({MAX_HITS_WITH_DEPS}) reached")
+    unique = distinct[:MAX_HITS_WITH_DEPS]
     if len(unique) == len(tree.hits) and files == tree.files and skipped == tree.skipped:
         return tree
     return tree.model_copy(update={"hits": unique, "files": files, "skipped": skipped})

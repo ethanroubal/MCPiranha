@@ -1,383 +1,157 @@
 # MCPiranha
 
-Security scanner for Model Context Protocol (MCP) servers: tool poisoning, cross-server shadowing,
-rug pulls, insecure configuration, vulnerable implementations and dangerous combinations of servers.
-It works fully offline. Design: [docs/ARCHITECTURE.md](https://github.com/ethanroubal/MCP-Server-Security-Scanner/blob/main/docs/ARCHITECTURE.md).
+[![PyPI](https://img.shields.io/pypi/v/mcpiranha)](https://pypi.org/project/mcpiranha/)
+[![CI](https://github.com/ethanroubal/MCPiranha/actions/workflows/ci.yml/badge.svg)](https://github.com/ethanroubal/MCPiranha/actions/workflows/ci.yml)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://github.com/ethanroubal/MCPiranha/blob/main/pyproject.toml)
 
-**Status: 0.3.0.** 53 built-in rules (see [docs/RULES.md](https://github.com/ethanroubal/MCP-Server-Security-Scanner/blob/main/docs/RULES.md)) run on client configs, snapshot
-files and, with `--connect`, on what servers actually serve. Toxic-flow analysis across servers
-is in; an experimental local classifier is optional; an LLM layer is planned.
+Find security risks in **Model Context Protocol (MCP) servers** before giving them access to
+your files, credentials or other tools. MCPiranha scans client configurations, Python and
+JavaScript/TypeScript source, published packages, and live server metadata.
 
-## Install
+**Static scans do not start servers or run package code.** Live inspection and tool invocation
+are explicit opt-ins. Reports show both findings and what the scanner could actually inspect.
 
-```bash
-uvx mcpiranha scan              # run without installing (needs uv)
-pipx install mcpiranha          # or install the command
-pip install 'mcpiranha[ml]'     # with the experimental classifier
-```
+This README describes `main`; see the [changelog](https://github.com/ethanroubal/MCPiranha/blob/main/CHANGELOG.md) for changes not yet on PyPI.
 
-Requires Python 3.12+. `--connect` uses Docker for its sandbox.
+[Quick start](#quick-start) · [Common tasks](#common-tasks) · [Reading results](#reading-results) ·
+[Limits](#limits) · [Full usage guide](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md)
 
-## Usage
+## Quick start
 
-```bash
-mcpiranha scan                      # every MCP client config on this machine + the current project
-mcpiranha scan .mcp.json            # one config file (Claude, Cursor, VS Code, Windsurf formats)
-mcpiranha scan ./some-project       # a project's .mcp.json, .cursor/mcp.json, .vscode/mcp.json
-mcpiranha scan --connect            # also start/reach each server and check its tools, prompts, resources
-mcpiranha scan npm:@scope/server@1.2.3   # inspect package source without executing it
-mcpiranha scan pypi:some-server==1.2.3   # inspect a PyPI wheel/sdist without installing it
-mcpiranha scan path:./server-source     # inspect source, even if the folder has MCP configs
-mcpiranha scan --connect npm:@scope/server@1.2.3   # also start/list it in the sandbox
-mcpiranha scan --connect https://mcp.example.com/mcp --oauth          # sign in (opens a browser)
-mcpiranha scan --connect https://mcp.example.com/mcp -H "Authorization: Bearer $TOKEN"
-mcpiranha scan --connect --strict   # CI: exit 2 if any server couldn't be checked
-mcpiranha scan -f sarif -o mcpiranha.sarif   # for GitHub code scanning
-mcpiranha lock --connect            # pin launch configs and tool definitions to mcp-lock.json
-mcpiranha verify --connect          # exit 1 if anything changed or was added since the lock
-mcpiranha inspect --connect <target>   # show the text the model reads, hidden characters revealed
-mcpiranha flows                     # each client's tool capabilities and the toxic flows between them
-mcpiranha scan --offline            # no registry / osv.dev lookups or package downloads
-mcpiranha scan --no-deps            # online, but skip dependency trees
-mcpiranha scan --classifier         # experimental: add the local ML classifier (pip install 'mcpiranha[ml]')
-mcpiranha bench                     # in a checkout: score against the zoo of known-bad servers
-```
-
-Supported clients: Claude Desktop, Claude Code, Cursor, VS Code, Windsurf, Zed, Cline, Roo Code,
-Gemini CLI, Codex CLI, Continue, Goose, Amazon Q Developer CLI, Kiro, opencode and LM Studio, on
-macOS, Linux and Windows. See [docs/CLIENTS.md](https://github.com/ethanroubal/MCP-Server-Security-Scanner/blob/main/docs/CLIENTS.md) for paths and formats.
-Reports never contain secret values.
-
-### Toxic flows
-
-Servers that are harmless alone can be dangerous together. mcpiranha labels every tool (reads
-untrusted content, reads private data, sends data out, runs code, destroys data) from its name,
-its parameters and a table of well-known servers, then looks across all servers one client
-loads. **MCP-TF-001** reports the "lethal trifecta", e.g. `github.get_issue -> filesystem.read_file
--> slack.post_message`: one poisoned issue can make the agent read your files and post them.
-**MCP-TF-002** reports untrusted content next to code execution or destructive tools. Flows across
-servers are high severity (critical if the last step is auto-approved); flows inside a single
-server, which are usually by design, are lower. Well-known servers count even without
-`--connect`.
-
-### Supply chain
-
-`scan` looks every npm and PyPI package a config runs up on the registry and on
-[osv.dev](https://osv.dev): the release `npx`/`uvx` would install (or, with `--connect`, the one
-that was installed), its publisher, install scripts, provenance and the release before it.
-**MCP-SC-001** reports known vulnerabilities and known malware (e.g. `mcp-remote@0.1.15`,
-CVE-2025-6514; `postmark-mcp@1.0.16`, taken down and listed as MAL-2025-47604).
-**SC-002** install scripts (high when the release just added one), **SC-003** a release that lost
-its build provenance or moved to another owner's repository, **SC-004** a package under 30 days
-old, **SC-005** a release by an npm account that never published the package before, **SC-006**
-deprecated or yanked releases and names missing from the registry (which anyone could register).
-This sends package names and versions to those services; `--offline` (or
-`MCPIRANHA_OFFLINE=1`) turns it off. `MCPIRANHA_NPM_REGISTRY` / `MCPIRANHA_PYPI_INDEX` point
-at a mirror. Docker images aren't looked up yet.
-
-**Dependencies** get the same treatment (`--no-deps` turns it off): the tree npx/uvx would
-install is resolved from registry metadata (npm ranges and aliases; PyPI Requires-Dist with
-markers evaluated for the sandbox's Python), up to 400 packages, and every dependency is checked
-against OSV. **SC-007** reports known malicious (critical) or vulnerable dependencies, **SC-008**
-dependencies that run code at install (low; high when a release from the last 30 days just added
-it), **SC-009** suspicious ones: a name the registry doesn't have, a git or URL dependency, or a
-recent release with a new publisher or without the provenance its predecessor had. Install
-scripts' command lines are judged as executed commands, and the code of dependencies that run at
-install or look hijacked is read with the MCP-SRC rules (paths show `name@version/file`). Each
-finding names the chain that pulls the dependency in (`server > lib > leaf`).
-
-### Source analysis
-
-mcpiranha also reads the code a server runs, without running it: a local script the config
-launches (`python server.py`, `node build/index.js`), or, online, the npm tarball or PyPI wheel
-of the resolved release, checked against the registry's hash and read in memory (nothing is
-extracted or installed). Python is parsed with `ast`, JavaScript/TypeScript (bundles and
-minified output included) with tree-sitter. The MCP-SRC rules look for malice behind honest
-metadata: **SRC-001** a fixed address added as Bcc/Cc (how postmark-mcp copied every email),
-**SRC-002** collecting secrets from the environment, **SRC-003** credential paths in code that
-also has a way out, **SRC-004** running decoded, downloaded or obfuscated code, **SRC-005** a
-hardcoded request catcher, tunnel or Discord webhook, **SRC-006** reverse shells, **SRC-007**
-miners, **SRC-008** persistence (writing shell profiles, LaunchAgents, cron), **SRC-009** writing
-MCP client configs, **SRC-010** wipers. Command strings only count when executed and config paths
-only when written, since deny-lists and installers are full of both.
-
-**Exploitable tool handlers** (taint analysis): tool arguments are followed from the handler
-(`server.tool(...)`, `registerTool`, `@mcp.tool()`, low-level `call_tool` handlers) through
-assignments, simple object/dictionary fields and aliases, common array/iterable callbacks, and
-helper arguments/returns across the package's files (two calls deep). **SRC-101** command injection,
-**SRC-102** SQL injection, **SRC-103** path traversal, **SRC-104** SSRF. Only input spliced into
-code the developer wrote counts: ``execSync(`git log ${branch}`)`` is reported, a shell tool
-running the `command` it's given is a capability (the toxic-flow rules cover that), not a bug.
-It flags the vulnerable releases of two servers with published command-injection CVEs, and
-stays quiet on their fixes.
-
-Path guards are matched to the value being used and must execute before the file operation.
-Recognized patterns include resolved Python paths checked with `is_relative_to`/`relative_to`,
-normalized JavaScript paths checked against a normalized base plus `path.sep`, and filename
-component rejection (both separators and dot traversal for portable paths). A label, comment,
-ignored boolean check, weak string prefix or check on another path does not suppress a finding.
-Protection passed to helpers is specific to the checked argument. Custom validators and more
-complex control flow can still require manual review; this does not prove filesystem safety
-against symlink races or arbitrary side effects.
-
-Unguarded paths joined to an intended base and input inserted into a request's host are high
-severity risks (SRC-103/SRC-104), with medium static-analysis confidence. They now affect the
-normal `--fail-on high` gate; recognized safe cases and whole-input capabilities remain excluded.
-
-Sanitizers are evaluated for the sink: shell quoting does not make a path, SQL fragment or
-hostname safe. Quoting inside existing shell quotes is not accepted as protection. Small
-literal allowlists can suppress findings only when they reject unsafe values before use and
-the checked binding remains unchanged. Arbitrary object methods, dynamic dispatch, custom
-validators and deep call chains remain limitations. Detection-quality measurements and their
-limits are documented in [the evaluation report](evaluation/README.md).
-
-### Server behavior during a session
-
-With `--connect`, mcpiranha also reads prompt bodies and static resource contents and keeps log
-notifications, so poisoning there is caught like poisoning in descriptions. It advertises
-sampling, elicitation and roots like a real client (over the classic protocol too, where servers
-can send such requests mid-call), declines every request, and reports a server that uses your
-model, maps your workspace (**DY-001**) or asks you for input, worst when it's a password or token
-(**DY-002**), while it was only being listed.
-
-### Experimental classifier
-
-`--classifier` adds a local prompt-injection model (protectai/deberta-v3-base-prompt-injection-v2,
-Apache-2.0, ~740 MB, downloaded once and verified against pinned hashes). It catches some reworded
-attacks the phrase rules miss, but it was trained on chat prompts and flags ordinary usage
-guidance in tool descriptions too, so its findings are low severity and meant as a review
-queue. Measurements: [calibration/README.md](https://github.com/ethanroubal/MCP-Server-Security-Scanner/blob/main/calibration/README.md).
-
-### Policy file
-
-`.mcpiranha.yaml` in the current directory (or `--policy PATH`) sets defaults and suppresses
-findings you've reviewed. Suppressed findings stay in JSON and SARIF output, marked with their
-reason.
-
-```yaml
-fail_on: high
-strict: true            # exit 2 if any server couldn't be connected to
-suppress:
-  - rule_id: MCP-CF-001
-    server: internal-db
-    reason: Secret is injected by vault at runtime   # required
-    expires: 2027-01-01                               # optional
-  - rule_id: "MCP-TP-*"   # globs work for rule_id, server and tool
-    server: docs-search
-    reason: Reviewed 2026-10; descriptions quote attack examples on purpose
-```
-
-### Static inspection without execution
-
-`scan npm:<package>` and `scan pypi:<package>` resolve registry metadata, check advisories and
-inspect hash-verified release archives without installing the package, running install scripts
-or starting the server. Network access is used for metadata and archives; `--offline` disables
-those lookups. Tool metadata remains unknown until an explicit `--connect` scan. Docker images
-and remote URLs still require `--connect`.
-
-A `.py`, `.js` or `.ts` file (including supported variants) is read as source. A directory with
-no discovered MCP configuration is scanned as source; directories with configurations retain
-client discovery behavior. Use `path:<directory>` to explicitly inspect source in either case.
-Source traversal excludes dependency/test directories and does not follow child symlinks.
-Source-only paths have no launch configuration and reject `--connect`. Python parse failures
-and JavaScript/TypeScript recovery errors produce partial source coverage, preserving findings
-from files or syntax trees that could still be analyzed.
-
-### Server selection and scan coverage
-
-Use `--server` to select an exact server name or stable ID before any connection, package
-lookup or source acquisition. Repeat it to select several servers. `--client` narrows the
-selection to exact client identifiers such as `cursor` or `claude-desktop`:
+Requires **Python 3.12+**. Docker is needed for sandboxed local server connections, not static scans.
 
 ```bash
-mcpiranha scan --client cursor --server filesystem --connect
-mcpiranha scan .mcp.json --server search --connect --dynamic --invoke search
-mcpiranha scan .mcp.json --server search --server files --offline
+# Run without installing, using uv
+uvx mcpiranha scan .mcp.json
+
+# Or install the command
+pipx install mcpiranha
+mcpiranha scan .mcp.json
 ```
 
-Names shared by multiple clients select all matches; combine with `--client` or use the ID
-shown in terminal reports, JSON reports or `inspect` to disambiguate. Every selector must
-match, or the command exits 2 before acquisition. Repeated values are combined with OR;
-client and server selectors are combined with AND. Selection also works with `lock`,
-`verify`, `inspect` and `flows`. A selected `lock` writes only the selected servers; selected
-`verify` ignores removals outside that scope. Cross-server rules see only the selected servers,
-so scan the whole client configuration when checking interactions between servers.
+Without a target, `mcpiranha scan` discovers supported client configurations on your machine
+and in the current project. [Supported clients and config paths](https://github.com/ethanroubal/MCPiranha/blob/main/docs/CLIENTS.md) include
+Claude Desktop/Code, Cursor, VS Code, Codex CLI and others on macOS, Linux and Windows.
 
-Each report includes per-server coverage for configuration, tool metadata, source, package
-and vulnerability lookups, dependencies, dynamic tracing, and explicit tool invocation.
-Statuses are `completed`, `partial`, `skipped`, `failed`, or `unknown`, with reasons and
-file/tool/dependency/call counts where applicable. A completed stage means evidence was
-collected within that stage's limits; it does not establish that the server is safe. An empty
-tool list is distinguished from tools that could not be listed. Tracing and invocation have
-separate statuses because either can run without the other.
+Registry/advisory lookups use the network by default and send package names and versions to
+registries and OSV. Add **`--offline`** for local or saved evidence only.
 
-Saved snapshots retain coverage; reloaded records are labelled as saved evidence, not fresh
-observations. Older snapshots remain readable and their coverage is inferred conservatively.
-JSON reports now use `schema_version: 2` with coverage under each server. SARIF stores it in
-`runs[].properties.coverage` and includes scan warnings in invocation notifications. Coverage
-does not change severity thresholds or the existing warning-based `--strict` behavior.
-Use `--require-coverage source` (repeatable) or policy `require_coverage: [source, package]`
-to exit 2 when required stages are partial, skipped, failed or unknown. Requirements apply to
-every selected server and cannot be suppressed as findings; no targets also fails a requirement.
-CLI requirements add to policy requirements. Saved completed evidence can satisfy a requirement;
-it does not imply a fresh connection or lookup.
+## Common tasks
 
-### What `--connect` does
+| Task | Command |
+|---|---|
+| Scan a client configuration | `mcpiranha scan .mcp.json` |
+| Scan a source directory explicitly | `mcpiranha scan path:./server-source --offline` |
+| Inspect an npm release without installing it | `mcpiranha scan npm:@scope/server@1.2.3` |
+| Inspect a PyPI release without installing it | `mcpiranha scan pypi:some-server==1.2.3` |
+| Select one server from a config | `mcpiranha scan .mcp.json --server search` |
+| Inspect live tools, prompts and resources | `mcpiranha scan .mcp.json --server search --connect` |
+| Inspect risky combinations of servers | `mcpiranha flows .mcp.json` |
+| Export GitHub code-scanning results | `mcpiranha scan .mcp.json -f sarif -o scan.sarif` |
 
-It initializes the server, lists tools, prompts and resources, and fetches supported prompt
-bodies and static resource contents. Tool calls require explicit `--invoke` names. Tools are
-listed twice to catch servers that change them mid-session.
+`--server` selects an exact name or ID and can be repeated. Add `--client cursor` to narrow
+client discovery. Unmatched selectors fail before acquisition. Cross-server checks use only
+the selected servers; scan the whole configuration to assess their interactions.
 
-- **stdio servers** run in a Docker sandbox by default. The package is downloaded with network
-  access but without running any of its code (`npm install --ignore-scripts`, wheels only for
-  PyPI), then the server runs with no network, a read-only filesystem, no capabilities, a
-  non-root user and resource limits. Servers that run local files can't be sandboxed this way;
-  `--sandbox none` runs servers directly on this machine, as your MCP client would.
-- **Env vars** get dummy values unless you pass `--real-credentials` (which also expands
-  `${VAR}` references). Most servers list their tools without valid credentials.
-- **Remote servers** are reached without credentials unless you pass `--real-credentials`
-  (the config's headers), `--header` (for a single URL target only, so a token can't reach
-  another server) or `--oauth` (signs in through your browser; tokens stay in memory for that
-  run). A server that answers without credentials is reported (MCP-CF-003).
-- **Servers run in parallel**, four at a time (`--jobs`). npm and uv downloads are cached in the
-  Docker volumes `mcpiranha-npm-cache` and `mcpiranha-uv-cache`; remove them with
-  `docker volume rm` to start fresh.
-- **Locking** with `--connect` also pins the package version or image digest that actually ran,
-  so `verify` catches an unpinned `npx -y pkg` quietly moving to a new release.
-- **Opt-ins** for servers that won't start otherwise: `--allow-network` (network while running)
-  and `--allow-install-scripts` (npm install scripts and PyPI source builds during download).
-  Both are off by default.
-- **`--save-snapshots DIR`** keeps what each server served, so it can be rescanned offline.
-- **Disabled servers** (disabled in their client config) aren't started.
-- **Older servers** that crash on the 2026 `server/discover` probe are retried in a fresh
-  process with the classic `initialize` handshake.
-- **Versions can differ from your machine's**: npm picks the newest release whose `engines`
-  match the sandbox's Node 22 (`MCPIRANHA_NODE_IMAGE` overrides the image), so an unpinned package
-  may resolve differently than on a machine with a newer Node.
+### What it checks
 
-## Calibration
+| Area | Examples |
+|---|---|
+| Model-facing content | Prompt injection, hidden instructions, encoded payloads, secret-export links |
+| Source behavior | Shell/SQL injection, path traversal, SSRF, secret harvesting, persistence |
+| Client configuration | Embedded secrets, insecure endpoints, excessive approval settings |
+| Supply chain | Known vulnerabilities/malware, dependency risks, publisher/provenance changes |
+| Cross-server interactions | Untrusted content combined with private-data access or code execution |
+| Opt-in runtime behavior | Synthetic credential access, process activity and unexpected network destinations |
 
-The tool-metadata rules are tuned against the 100 most-downloaded servers in the official MCP
-registry: zero false positives on the 59 the sandbox could list, with the attack fixtures still
-detected. Method, scripts and results: [calibration/README.md](https://github.com/ethanroubal/MCP-Server-Security-Scanner/blob/main/calibration/README.md).
+See the [rule catalog](https://github.com/ethanroubal/MCPiranha/blob/main/docs/RULES.md) for individual checks and severity guidance.
 
-The supply-chain rules were run on the same 85 npm/PyPI servers, pinned and unpinned: no false
-publisher or provenance alarms, one package with 159 advisories, two yanked or deprecated
-releases, and one registry config that runs a PyPI name nobody owns. The source rules read
-19,000 files across their releases with no findings.
+## Reading results
 
-Attacks are tested against [the zoo](https://github.com/ethanroubal/MCP-Server-Security-Scanner/blob/main/zoo/README.md): 48 safe-by-construction
-malicious and vulnerable servers, configs and packages, including reconstructions of public
-incidents and hijacked or backdoored releases (and dependencies) served from local registries.
-They're organized by a [threat catalog](https://github.com/ethanroubal/MCP-Server-Security-Scanner/blob/main/zoo/threats.yaml) of 63 ways an MCP server can act
-maliciously, which a test keeps in sync with the rules: 55 are detected, 6 partly, and 2 are
-tracked gaps (repository diffs and conditional runtime triggers). Runtime egress and file
-access have partial coverage through opt-in behavioral scanning.
+A finding includes severity, confidence, evidence, location and remediation. **Severity is
+potential impact; confidence is certainty in the analysis.** A high-severity static finding
+can have medium confidence and still need review.
 
-## Development
+Coverage is reported per server for configuration, tools, source, package/dependency checks,
+dynamic tracing and invocation. Read it alongside the findings:
+
+| Coverage status | Meaning |
+|---|---|
+| `completed` | Evidence was collected within the supported analysis model; not proof of safety |
+| `partial` | Some evidence or analysis was omitted; the report explains why |
+| `skipped` | That stage did not run, such as tool listing during a static scan |
+| `failed` / `unknown` | The stage failed or its completeness cannot be established |
+
+Helper flows use a cached work queue. When context, return-summary, node, guard-inference or
+finding limits are reached, findings already collected are retained and source coverage is
+marked **partial**. Saved snapshots retain those limitations. Completion does not establish
+that arbitrary dynamic calls, custom classes or validators were understood.
+
+### Use in CI
+
+```bash
+mcpiranha scan path:./server-source --offline --strict \
+  --require-coverage source --fail-on high -f json -o scan.json
+```
+
+| Exit code | Meaning |
+|---|---|
+| `0` | No unsuppressed finding at or above the threshold; requested checks passed |
+| `1` | Findings meet the configured failure threshold |
+| `2` | Scan/input failure, a strict-mode warning, or an unmet coverage requirement |
+
+`--strict` fails on scan warnings, including partial source analysis. Repeat
+`--require-coverage` to require additional stages. Requirements apply to every selected server;
+a static scan cannot satisfy tool-listing coverage. Saved evidence can satisfy a coverage
+requirement but does not imply a fresh connection or lookup.
+
+Reviewed exceptions belong in [`.mcpiranha.yaml`](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md#policy-file), with a reason and
+optional expiration. Suppressed findings remain visible in JSON and SARIF.
+
+## Live inspection and change detection
+
+```bash
+# Start/list the selected server; no tool invocation
+mcpiranha scan .mcp.json --server search --connect --save-snapshots ./captures
+
+# Pin launch settings and tool definitions, then detect subsequent changes
+mcpiranha lock .mcp.json --connect
+mcpiranha verify .mcp.json --connect
+```
+
+Local package servers run in a Docker sandbox by default, with dummy credentials, a read-only
+filesystem and runtime networking disabled. Remote URLs require `--connect`; OAuth is available
+with `--oauth`. Tool calls require explicit `--invoke NAME` and can have side effects.
+
+For synthetic-credential tracing, bounded fuzzing, remote authentication and sandbox options,
+see the [usage guide](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md#behavioral-scanning-phase-04).
+
+## Limits
+
+Detection is bounded and heuristic. A clean report does not prove that a server is safe.
+Novel paraphrases, unresolved/dynamic calls, arbitrary heap objects, custom validators,
+filesystem races and dormant runtime triggers remain gaps. Registry dependency resolution may
+differ from an installed environment; Docker image source is not analyzed.
+
+The [labeled evaluation](https://github.com/ethanroubal/MCPiranha/blob/main/evaluation/README.md) records attacks, benign controls, misses, false
+alarms and implementation fingerprints. Its examples were used during development; passing
+that set is not an independent estimate of real-world accuracy. Tests also cover two existing
+vulnerable/fixed release pairs. Broader independent validation remains necessary.
+
+## Development and documentation
 
 ```bash
 uv sync --all-extras
-uv run mcpiranha scan fixtures/metadata/unicode-tag-smuggling/snapshots.json
-uv run mcpiranha scan fixtures/configs/claude_desktop_config.json
-uv run mcpiranha inspect fixtures/metadata/unicode-tag-smuggling/snapshots.json
-uv run pytest                     # MCPIRANHA_DOCKER_TESTS=1 also runs a real Docker sandbox
-uv run ruff check . && uv run ruff format --check . && uv run pyright
+uv run pytest -q
+uv run ruff check .
+uv run pyright
 ```
 
-The [adversarial testing guide](https://github.com/ethanroubal/MCP-Server-Security-Scanner/blob/main/docs/TESTING.md) explains the attack/disguise matrix, benign
-controls, live replay tests, runtime evidence checks and the limits of what they prove.
+- [Advanced usage and runtime scanning](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md)
+- [Testing and optional Docker/registry checks](https://github.com/ethanroubal/MCPiranha/blob/main/docs/TESTING.md)
+- [Detection-quality evaluation](https://github.com/ethanroubal/MCPiranha/blob/main/evaluation/README.md)
+- [Rules](https://github.com/ethanroubal/MCPiranha/blob/main/docs/RULES.md) · [Client support](https://github.com/ethanroubal/MCPiranha/blob/main/docs/CLIENTS.md) · [Architecture](https://github.com/ethanroubal/MCPiranha/blob/main/docs/ARCHITECTURE.md)
+- [Changelog](https://github.com/ethanroubal/MCPiranha/blob/main/CHANGELOG.md) · [Adding rules](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md#adding-a-rule)
 
-## Adding a rule
-
-1. Reserve an id in `docs/RULES.md`.
-2. Add a module under `src/mcpiranha/rules/builtin/` with a `Rule` subclass decorated with
-   `@register` (see `invisible_unicode.py`). Iterate text with `iter_text_fields` so nested schema
-   text is covered.
-3. List the id in `expected.json` for each fixture case it should fire on, and add a benign
-   look-alike case. `tests/test_fixtures.py` then checks it everywhere.
-4. Build any invisible or look-alike characters with `chr()`; `tests/test_source_hygiene.py`
-   fails on raw ones in the source.
-
-Third-party rule packs can register through the `mcpiranha.rules` entry-point group.
-
-## Behavioral scanning (phase 04)
-
-```bash
-# Observe startup/listing: seed synthetic credentials, trace syscalls, log/deny egress.
-uv run mcpiranha scan npm:@acme/server@1.2.3 --connect --dynamic --strict
-
-# Explicitly call one named tool. Annotations never authorize invocation.
-uv run mcpiranha scan npm:@acme/server@1.2.3 --connect --dynamic \
-  --invoke lookup --invoke-args '{"query":"mcpiranha-test"}' --save-snapshots ./captures
-
-# Add traversal, shell-marker and reserved-address SSRF inputs (maximum 24 calls/server).
-uv run mcpiranha scan npm:@acme/server@1.2.3 --connect --dynamic \
-  --invoke lookup --invoke-args '{"query":"mcpiranha-test"}' --fuzz
-```
-
-`--dynamic` requires a Linux Docker runtime with compatible architecture and support for
-sharing a container's PID namespace and attaching strace. It builds a cached trusted helper
-image (network needed for the first build). A static launcher seeds the synthetic HOME and
-waits until a separate collector attaches, then starts the server. The server runs as UID 1000
-without capabilities and mounts only read-only package/launcher volumes. Only the trusted
-collector receives `SYS_PTRACE`; its private trace volume is never mounted in the server.
-Untrusted server images are never used as build bases or run during helper setup.
-
-The server joins an internal network; a separate HTTP/HTTPS proxy logs destinations and denies
-requests. With `--allow-network`, that proxy forwards HTTP/HTTPS, including CONNECT for TLS.
-Clients ignoring proxy environment variables cannot directly reach the Internet. The proxy
-records destinations, never headers or bodies; it does not decrypt TLS.
-
-The synthetic HOME contains fake SSH, AWS, dotenv and browser-cookie files. Successful opens
-for reading during startup/listing produce critical findings. The sensor also follows positive
-reads through observed duplicated/inherited descriptors, readable file mappings, and observed
-hard-link and rename aliases (including renamed directories). Descriptor close/reuse and
-close-on-exec state are tracked. Read buffers are not decoded: evidence contains addresses
-and byte counts. A readable mapping is reported as a mapping, not proof its pages were read.
-Reports prefer the strongest evidence for a credential within each phase/probe window.
-Syscall tracing handles absolute and relative paths, directory file descriptors, forked
-working directories, split syscall records, DNS queries and process execution. Attempts to signal or trace the protected collector
-produce MCP-DY-007 findings. Evidence is retained even when initialization crashes, while the
-scan remains incomplete (`--strict` exits 2). Trace limits, unsupported runtimes, unobserved
-syscalls and conditional triggers remain coverage limits; a clean scan is not proof of safety.
-The default scan remains static.
-
-`--invoke NAME` is repeatable and requires exactly one server target. It can cause side effects
-even if a server labels its tool read-only. Bounded required objects, arrays and local schema
-references can be generated; unsupported constraints require `--invoke-args` as a JSON object.
-Generated and explicit baseline arguments are checked against JSON Schema Draft 7, 2019-09
-or 2020-12 before any tool call. Validation runs offline in a separate worker with a two-second wall limit, bounded
-input/depth/size, and Linux CPU/memory limits. External references are never fetched; costly
-or unsupported schemas fail the probe visibly. Format annotations are not asserted. A server
-rejecting a valid baseline makes the scan incomplete and stops further probes for that tool;
-the response is retained. `--fuzz` deliberately permits mutations outside schema constraints,
-mutates nested string values, and makes at most 24 calls per server.
-A separate nonsensitive traversal canary lives at `/tmp/mcpiranha-canary`. Each call has a probe
-ID, variant, argument path, status and time window. Saved snapshots link outputs and behavioral
-observations to those probe IDs. MCP-DY-006 flags canary access during a matching fuzz window;
-this temporal association does not establish causality or unauthorized behavior. Tool text and
-structured results also pass through the existing poisoning detectors. Failed or truncated
-probes produce warnings; the scanner never replays a call after invocation begins.
-
-Declare expected destinations explicitly to distinguish normal traffic from unknown endpoints:
-
-```bash
-uv run mcpiranha scan npm:@acme/server@1.2.3 --connect --dynamic \
-  --expected-destination api.example.com:443 --observe-seconds 5 --strict
-```
-
-`--expected-destination` is repeatable and matches an exact normalized host:port across the scan.
-It keeps matching network activity as informational findings; it does **not** permit egress,
-verify a destination's safety, suppress unknown destinations, or lower credential-access findings.
-DNS queries use host:53 entries. Only the proxy hop and its internal hostname lookup are treated
-as infrastructure; other DNS queries remain visible. `--observe-seconds` accepts 0–30 seconds
-within the server timeout. Delayed observations outside a call window remain unassigned rather
-than being attributed to a completed probe. Explicit invocation also works over remote
-transports and the existing `--sandbox none` mode, without local syscall tracing.
-
-Run the safe Docker regression with:
-
-```bash
-MCPIRANHA_DOCKER_TESTS=1 uv run pytest -q tests/test_dynamic*.py
-```
+The optional local classifier is experimental. The LLM layer, runtime guard proxy and MCP
+server mode are planned; see [classifier details](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md#experimental-classifier).

@@ -128,3 +128,27 @@ stored as `evaluation/high-threshold-{medium,high}.json`; the original baseline 
 candidate reports remain intact, and regression tests compare against all three stages.
 Source severity expresses high potential impact while confidence remains medium. See the
 [evaluation report](../evaluation/README.md) for the escalation policy and its limitations.
+
+
+### Deeper helper flows and analysis limits
+
+`uv run pytest -q tests/test_deep_helpers.py` runs 57 checks covering Python and
+JavaScript/TypeScript sink chains of 3, 8 and 80 helpers, return chains of 3, 8 and 16 helpers,
+and their safe counterparts. It also checks cross-file calls, recursive sink graphs,
+context/return-summary reuse, separation of guarded or sanitized arguments, and concurrent
+JavaScript package scans with isolated parser instances.
+
+Forced context, summary, node, assignment, literal, expression/alias depth and finding limits must retain available
+findings and mark source coverage partial. A 30-helper return chain checks the actual return
+depth bound. Unresolved recursive return summaries must also report partial coverage while
+retaining other findings. Saved evidence retains the limitation, and CLI checks require exit 2 under
+`--strict` or `--require-coverage source`. These developer-authored regressions address the
+previous two-helper miss; they do not measure independent deployment accuracy.
+
+
+The unchanged corpus is also recorded in `evaluation/helper-flow-{medium,high}.json`, with
+32/32 attacks detected, no benign alerts and no incomplete cases at either threshold. Both
+vulnerable/fixed release pairs pass. The three pinned package scans keep the same findings;
+filesystem now reports an unresolved recursive return summary as partial coverage, while
+everything and time remain completed. This is a correction to completeness reporting, not a
+new vulnerability finding.

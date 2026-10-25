@@ -207,3 +207,35 @@ or warnings. Both CVE/fixed release pairs remain covered by the integration suit
 Risk classification remains heuristic. Source findings do not prove exploitability, and text
 correlation does not provide general natural-language reasoning or prove that a client will
 obey an instruction. Independent examples and representative deployment data are still needed.
+
+
+## Deeper helper-flow follow-up
+
+`helper-flow-medium.json` and `helper-flow-high.json` preserve another measurement against
+the identical 64-case corpus: 32/32 attacks detected, 0/32 benign alerts, and no incomplete
+analyses at either threshold. The earlier stages remain unchanged. This corpus did not expose
+the two-call helper cutoff; the new deep-chain regressions exercise that gap directly.
+
+`tests/test_deep_helpers.py` adds 57 developer-authored checks. Python and JavaScript/TypeScript
+sink chains through 3, 8 and 80 helpers now alert, while sanitized counterparts stay quiet.
+Return chains through 3, 8 and 16 helpers also work. Cross-file calls, recursive sink graphs,
+context-sensitive caching and parallel parser use are covered. Cache keys keep guard and
+argument-sanitization contexts separate rather than reusing a safety conclusion indiscriminately.
+
+A work queue replaces the fixed helper-call depth. Return inference remains bounded; context,
+summary, node, assignment, expression/alias depth, literal, guard and finding limits now mark
+source coverage partial and retain available findings. Unresolved recursive return summaries
+also report partial coverage. These reasons survive snapshot replay and fail `--strict` or
+a source coverage requirement. See [the usage guide](../docs/USAGE.md#source-analysis) for limits.
+
+Both existing vulnerable/fixed registry pairs still pass. Repeating the same three pinned
+package scans preserves all rule/severity finding counts across 58 files. Everything and time
+have completed source coverage; filesystem now reports partial coverage because its recursive
+`buildTree` return summary cannot be resolved. The prior completed status hid that limitation.
+No package code was installed or executed. This small pilot and the developer-authored tests
+are compatibility/regression evidence, not an independent deployment accuracy estimate.
+
+Remaining gaps include heuristic module/name resolution, limited callback APIs, arbitrary
+class/heap behavior, dynamic dispatch, custom validators, branch/mutation precision and runtime
+conditions. The earlier four-pass/two-call bounds describe the preceding implementation, not
+the current one. Independent project-separated validation remains the next quality priority.

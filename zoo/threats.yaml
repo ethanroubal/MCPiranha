@@ -429,11 +429,12 @@
   surface: source
   status: partial
   rules: [MCP-SRC-101, MCP-SRC-102, MCP-SRC-103, MCP-SRC-104, MCP-DY-006]
-  tests: [zoo:vulnerable-tools-py, zoo:vulnerable-tools-js, zoo:safe-tools, test:tests/test_dynamic_reliability.py::test_nested_fuzz_and_correlated_canaries, test:tests/test_quality_improvements.py::test_varied_objects_aliases_assignments_and_return_summaries]
+  tests: [zoo:vulnerable-tools-py, zoo:vulnerable-tools-js, zoo:safe-tools, test:tests/test_dynamic_reliability.py::test_nested_fuzz_and_correlated_canaries, test:tests/test_quality_improvements.py::test_varied_objects_aliases_assignments_and_return_summaries, test:tests/test_deep_helpers.py::test_deep_sink_calls_and_safe_twins, test:tests/test_deep_helpers.py::test_return_depth_exhaustion_is_visible]
   gap: >-
-    Taint is followed across the package's files, two calls deep, for handlers registered the
-    MCP SDKs' ways. Simple object/dictionary fields and aliases, common array/iterable callbacks
-    and helper returns are followed. Arbitrary heap objects, dynamic dispatch, deep call chains
+    Taint is followed across the package's files through a cached, context-sensitive work queue
+    for handlers registered the MCP SDKs' ways. Exhausted helper, return-summary, node,
+    propagation, guard and finding limits mark source coverage partial. Simple object/dictionary fields and aliases, common array/iterable callbacks
+    and helper returns are followed. Arbitrary heap objects, dynamic dispatch, chains beyond the analysis budgets
     and instances other than self/this remain unsupported. Path guard recognition is value-specific and ordered, with conservative support
     for known containment predicates and separator rejection, not arbitrary custom validators.
     Guard inference stops at 2,000 syntax nodes per function; unsupported patterns remain

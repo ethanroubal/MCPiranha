@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 from functools import cache
+from threading import local
 
 import tree_sitter
 import tree_sitter_javascript
@@ -42,14 +43,29 @@ _WRITTEN_NAME = re.compile(
 )
 
 
+class _Parsers(local):
+    def __init__(self) -> None:
+        self.by_kind: dict[str, tree_sitter.Parser] = {}
+
+
+_parsers = _Parsers()
+
+
 @cache
-def parser(kind: str) -> tree_sitter.Parser:
+def _language(kind: str) -> tree_sitter.Language:
     language = {
         "js": tree_sitter_javascript.language,
         "ts": tree_sitter_typescript.language_typescript,
         "tsx": tree_sitter_typescript.language_tsx,
     }[kind]()
-    return tree_sitter.Parser(tree_sitter.Language(language))
+    return tree_sitter.Language(language)
+
+
+def parser(kind: str) -> tree_sitter.Parser:
+    # Parser instances own mutable native state; collection runs in several worker threads.
+    if kind not in _parsers.by_kind:
+        _parsers.by_kind[kind] = tree_sitter.Parser(_language(kind))
+    return _parsers.by_kind[kind]
 
 
 def walk(node: Node) -> Iterator[Node]:

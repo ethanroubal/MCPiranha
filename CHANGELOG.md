@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Replace the two-call source-flow cutoff with cached, context-sensitive helper scheduling
+  across Python and JavaScript/TypeScript files. Follow deeper sink and return chains while
+  keeping safe argument and guard contexts separate.
+- Report exhausted analysis/finding budgets as partial source coverage, preserve findings and
+  replay reasons, and fail strict scans on incomplete source analysis.
+- Shorten the README around common tasks, coverage and CI; move advanced usage into a guide.
+
 - Classify unguarded handler-to-filesystem and handler-to-URL-host flows as high-impact risk,
   retaining medium static-analysis confidence and the existing capability/safety exclusions.
 - Escalate nearby authority/authorization overrides paired with harmful actions, explicit

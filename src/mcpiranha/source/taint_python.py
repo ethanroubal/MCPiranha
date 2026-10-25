@@ -28,12 +28,13 @@ from functools import partial
 from typing import Literal
 
 from mcpiranha.core.models import SourceHit, SourceHitKind
+from mcpiranha.source import analysis as limits
+from mcpiranha.source.analysis import Analysis
 from mcpiranha.source.path_guards_python import EMPTY_CHECKED, CheckedPaths, PathGuards
 from mcpiranha.source.shell_context import advance
 
 Shape = Literal["whole", "mixed", "based"]
 _RANK = {"whole": 1, "based": 2, "mixed": 3}
-MAX_DEPTH = 2
 
 Domain = Literal["shell", "sql", "path", "url"]
 _DOMAINS: tuple[Domain, ...] = ("shell", "sql", "path", "url")
@@ -85,6 +86,8 @@ class _Flow:
     shapes: dict[str, Shape] = field(default_factory=dict[str, Shape])
     domain: Domain = "shell"
     quote_context: bool = False
+    analysis: Analysis | None = None
+    where: str = "source"
     fields: dict[str, tuple[Shape, str] | None] = field(
         default_factory=dict[str, tuple[Shape, str] | None]
     )
@@ -94,6 +97,17 @@ class _Flow:
     safe: Callable[[ast.AST], bool] | None = None
     visiting: set[int] = field(default_factory=set[int])
 
+    def key(self) -> tuple[object, ...]:
+        return (
+            self.tool,
+            self.domain,
+            self.quote_context,
+            tuple(sorted(self.source.items())),
+            tuple(sorted(self.shapes.items())),
+            tuple(sorted(self.fields.items())),
+            tuple((k, tuple(id(v) for v in values)) for k, values in sorted(self.values.items())),
+        )
+
     def copy_fields(self, param: str, arg: ast.AST, outer: _Flow) -> None:
         key = _slot(arg)
         if key:
@@ -101,22 +115,38 @@ class _Flow:
                 if slot.startswith(key + "."):
                     self.fields[param + slot[len(key) :]] = taint
 
+    def clip(self, text: str) -> str:
+        return self.analysis.text(text, self.where) if self.analysis else text
+
     def text_of(self, node: ast.AST, seen: frozenset[str] = frozenset()) -> str:
+        if self.analysis and not self.analysis.visit(1, self.where):
+            return ""
         text = _literal_text(node)
-        if len(seen) > 8:
+        text = self.clip(text)
+        if len(seen) > limits.MAX_ALIAS_DEPTH:
+            if self.analysis:
+                self.analysis.limit("alias-depth", self.where, "literal alias depth limit reached")
             return text
         for item in ast.walk(node):
             key = _slot(item)
             if key in self.values and key not in seen:
                 for value in self.values[key]:
-                    text += " " + self.text_of(value, seen | {key})
+                    text = self.clip(text + " " + self.text_of(value, seen | {key}))
         if isinstance(node, ast.Call) and self.returns:
             for inner, value in self.returns(node, self):
-                text += " " + inner.text_of(value, seen)
+                text = self.clip(text + " " + inner.text_of(value, seen))
         return text
 
     def taint_of(self, node: ast.AST) -> tuple[Shape, str] | None:
-        if id(node) in self.visiting or len(self.visiting) > 40:
+        if self.analysis and not self.analysis.visit(1, self.where):
+            return None
+        if len(self.visiting) > limits.MAX_EXPRESSION_DEPTH:
+            if self.analysis:
+                self.analysis.limit(
+                    "expression-depth", self.where, "expression depth limit reached"
+                )
+            return None
+        if id(node) in self.visiting:
             return None
         self.visiting.add(id(node))
         try:
@@ -329,12 +359,16 @@ def _literal_text(node: ast.AST) -> str:
 def _host_is_tainted(node: ast.AST, flow: _Flow, seen: frozenset[str] = frozenset()) -> bool:
     """f"http://{host}/x", "https://" + host: the input decides which server is contacted."""
     if isinstance(node, ast.Name) and node.id in flow.source:
+        if node.id not in seen and len(seen) >= limits.MAX_ALIAS_DEPTH:
+            if flow.analysis:
+                flow.analysis.limit("alias-depth", flow.where, "URL alias depth limit reached")
+            return False
         return (
             any(
                 _host_is_tainted(value, flow, seen | {node.id})
                 for value in flow.values.get(node.id, ())
             )
-            if node.id not in seen and len(seen) < 8
+            if node.id not in seen and len(seen) < limits.MAX_ALIAS_DEPTH
             else False
         )
     if isinstance(node, ast.Call) and flow.returns:
@@ -368,7 +402,10 @@ class _Analyzer:
     def __init__(self, path: str, tree: ast.Module, lines: list[str]) -> None:
         self.path, self.tree, self.lines = path, tree, lines
         self.hits: list[SourceHit] = []
-        self.return_queries = 0
+        self.analysis = Analysis()  # replaced by the shared package session
+        self.bodies: dict[int, list[ast.AST]] = {}
+        self.summaries: dict[tuple[object, ...], list[tuple[_Flow, ast.AST]]] = {}
+        self.active_summaries: set[tuple[object, ...]] = set()
         self.functions: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -406,17 +443,32 @@ class _Analyzer:
     def run(self) -> list[SourceHit]:
         for tool, fn, params in self.handlers():
             for domain in _DOMAINS:
-                self.analyze(tool, fn, _Flow(tool, {p: p for p in params}, domain=domain), depth=0)
+                self.analyze(tool, fn, _Flow(tool, {p: p for p in params}, domain=domain))
         return self.hits
 
-    def analyze(self, tool: str, fn: ast.AST, flow: _Flow, depth: int,
-                checked: CheckedPaths = EMPTY_CHECKED) -> None:  # fmt: skip
-        """`checked`: caller-proven paths/components, bound to specific helper parameters."""
+    def body(self, fn: ast.AST) -> list[ast.AST]:
+        if id(fn) not in self.bodies:
+            self.bodies[id(fn)] = _body(fn)
+        return self.bodies[id(fn)]
+
+    def analyze(
+        self, tool: str, fn: ast.AST, flow: _Flow, checked: CheckedPaths = EMPTY_CHECKED
+    ) -> None:
+        key = (self.path, id(fn), flow.key(), checked)
+        where = f"{self.path}:{getattr(fn, 'lineno', 1)}"
+        self.analysis.submit(key, where, partial(self.evaluate, tool, fn, flow, checked))
+
+    def evaluate(self, tool: str, fn: ast.AST, flow: _Flow, checked: CheckedPaths) -> None:
+        flow.analysis, flow.where = self.analysis, self.path
         flow.shadowed = frozenset(self.functions)
-        flow.returns = lambda call, current: self.return_values(call, current, depth)
-        body = _body(fn)
+        flow.returns = lambda call, current: self.return_values(call, current, 0)
+        body = self.body(fn)
         self.populate(body, flow)
+        if not self.analysis.visit(len(body), self.path):
+            return
         guards = PathGuards(fn, lambda node: flow.taint_of(node) is not None, checked)
+        if guards.limited and flow.domain == "path":
+            self.analysis.limit("guards", self.path, "path-guard inference node limit reached")
         for node in body:
             if isinstance(node, ast.Call):
                 at_flow = replace(
@@ -425,15 +477,17 @@ class _Analyzer:
                     visiting=set(),
                 )
                 self.sink(node, at_flow, guards)
-                if depth < MAX_DEPTH:
-                    self.follow(node, at_flow, depth, guards)
+                self.follow(node, at_flow, guards)
 
     def populate(self, body: list[ast.AST], flow: _Flow) -> None:
-        for _ in range(4):  # flow-insensitive: assignments until nothing changes
+        for _ in range(limits.MAX_PROPAGATION_PASSES):
+            if not self.analysis.visit(len(body), self.path):
+                return
             changed = False
             for node in body:
                 if isinstance(node, ast.Assign):
-                    changed |= any(flow.assign(t, node.value) for t in node.targets)
+                    for target in node.targets:
+                        changed |= flow.assign(target, node.value)
                 elif isinstance(node, (ast.AnnAssign, ast.AugAssign, ast.NamedExpr)):
                     if node.value is not None:
                         changed |= flow.assign(node.target, node.value)
@@ -442,12 +496,10 @@ class _Analyzer:
                 elif isinstance(node, ast.withitem) and node.optional_vars is not None:
                     changed |= flow.assign(node.optional_vars, node.context_expr)
             if not changed:
-                break
+                return
+        self.analysis.limit("assignments", self.path, "assignment propagation did not converge")
 
     def return_values(self, call: ast.Call, flow: _Flow, depth: int) -> list[tuple[_Flow, ast.AST]]:
-        self.return_queries += 1
-        if depth >= MAX_DEPTH or self.return_queries > 2048:
-            return []
         func = call.func
         base = _name(func.value) if isinstance(func, ast.Attribute) else ""
         local = isinstance(func, ast.Name) or base in ("self", "cls")
@@ -471,15 +523,36 @@ class _Analyzer:
             if kw.arg in params and (taint := flow.taint_of(kw.value)):
                 inner.source[kw.arg], inner.shapes[kw.arg] = taint[1], taint[0]
                 inner.copy_fields(kw.arg, kw.value, flow)
-        inner.shadowed = frozenset(owner.functions)
-        inner.returns = lambda expr, current: owner.return_values(expr, current, depth + 1)
-        nodes = _body(callee)
-        owner.populate(nodes, inner)
-        return [
-            (inner, n.value) for n in nodes if isinstance(n, ast.Return) and n.value is not None
-        ]
+        key = (id(callee), inner.key(), depth)
+        if key in owner.summaries:
+            return owner.summaries[key]
+        where = f"{owner.path}:{callee.lineno}"
+        cycle = (id(callee), inner.key())
+        if cycle in owner.active_summaries:
+            self.analysis.limit(
+                "return-cycle", where, "recursive return summary could not be resolved"
+            )
+            return []
+        if not self.analysis.summary(depth, where):
+            return []
+        owner.active_summaries.add(cycle)
+        before = self.analysis.stops
+        try:
+            inner.analysis, inner.where = self.analysis, owner.path
+            inner.shadowed = frozenset(owner.functions)
+            inner.returns = lambda expr, current: owner.return_values(expr, current, depth + 1)
+            nodes = owner.body(callee)
+            owner.populate(nodes, inner)
+            result: list[tuple[_Flow, ast.AST]] = [
+                (inner, n.value) for n in nodes if isinstance(n, ast.Return) and n.value is not None
+            ]
+            if self.analysis.stops == before:
+                owner.summaries[key] = result
+            return result
+        finally:
+            owner.active_summaries.remove(cycle)
 
-    def follow(self, call: ast.Call, flow: _Flow, depth: int, guards: PathGuards) -> None:
+    def follow(self, call: ast.Call, flow: _Flow, guards: PathGuards) -> None:
         callback: ast.AST | None = None
         inputs: list[ast.AST] = []
         if _name(call.func) in {"map", "filter"} and len(call.args) >= 2:
@@ -513,7 +586,7 @@ class _Analyzer:
                     }
                     if taint := flow.taint_of(value):
                         inner.source[name], inner.shapes[name] = taint[1], taint[0]
-                self.analyze(flow.tool, fn, inner, depth + 1)
+                self.analyze(flow.tool, fn, inner)
             return
         # helper(x) or self.helper(x); not subprocess.run(...) that shares a local name
         func = call.func
@@ -552,7 +625,6 @@ class _Analyzer:
                 flow.tool,
                 callee,
                 inner,
-                depth + 1,
                 CheckedPaths(frozenset(protected_paths), frozenset(protected_components)),
             )
 
@@ -622,7 +694,9 @@ class _Analyzer:
                      f"requested by {func}()")  # fmt: skip
 
 
-def analyze_package(files: list[tuple[str, str]]) -> list[SourceHit]:
+def analyze_package(
+    files: list[tuple[str, str]], *, skipped: list[str] | None = None
+) -> list[SourceHit]:
     """Hits across a package's files: handlers in one file, sinks in another."""
     analyzers: list[_Analyzer] = []
     for path, text in files:
@@ -635,11 +709,16 @@ def analyze_package(files: list[tuple[str, str]]) -> list[SourceHit]:
     for analyzer in analyzers:
         for name, fn in analyzer.functions.items():
             package.setdefault(name, (analyzer, fn))
+    session = Analysis()
     for analyzer in analyzers:
         analyzer.package = package
+        analyzer.analysis = session
     for analyzer in analyzers:
         analyzer.run()
-    return [h for a in analyzers for h in a.hits]
+    session.drain()
+    if skipped is not None:
+        skipped.extend(session.limits.values())
+    return [h for a in analyzers for h in sorted(a.hits, key=lambda hit: hit.line)]
 
 
 def analyze(path: str, text: str) -> list[SourceHit]:

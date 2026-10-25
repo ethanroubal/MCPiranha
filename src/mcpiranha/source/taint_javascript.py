@@ -17,7 +17,11 @@ from dataclasses import dataclass, field, replace
 from functools import partial
 from typing import Literal
 
+from tree_sitter import Tree
+
 from mcpiranha.core.models import SourceHit, SourceHitKind
+from mcpiranha.source import analysis as limits
+from mcpiranha.source.analysis import Analysis
 from mcpiranha.source.javascript import Node, callee_of, node_text, parser, string_value, walk
 from mcpiranha.source.path_guards_javascript import PathGuards
 from mcpiranha.source.path_guards_python import EMPTY_CHECKED, CheckedPaths
@@ -25,7 +29,6 @@ from mcpiranha.source.shell_context import advance
 
 Shape = Literal["whole", "mixed", "based"]
 _RANK = {"whole": 1, "based": 2, "mixed": 3}
-MAX_DEPTH = 2
 _FUNCTIONS = ("arrow_function", "function_expression", "function_declaration", "function",
               "method_definition", "generator_function_declaration")  # fmt: skip
 
@@ -111,6 +114,8 @@ class _Flow:
     shapes: dict[str, Shape] = field(default_factory=dict[str, Shape])
     domain: Domain = "shell"
     quote_context: bool = False
+    analysis: Analysis | None = None
+    where: str = "source"
     fields: dict[str, tuple[Shape, str] | None] = field(
         default_factory=dict[str, tuple[Shape, str] | None]
     )
@@ -120,6 +125,17 @@ class _Flow:
     safe: Callable[[Node], bool] | None = None
     visiting: set[int] = field(default_factory=set[int])
 
+    def key(self) -> tuple[object, ...]:
+        return (
+            self.tool,
+            self.domain,
+            self.quote_context,
+            tuple(sorted(self.source.items())),
+            tuple(sorted(self.shapes.items())),
+            tuple(sorted(self.fields.items())),
+            tuple((k, tuple(v.id for v in values)) for k, values in sorted(self.values.items())),
+        )
+
     def copy_fields(self, param: str, arg: Node, outer: _Flow) -> None:
         key = _slot(arg)
         if key:
@@ -127,24 +143,40 @@ class _Flow:
                 if slot.startswith(key + "."):
                     self.fields[param + slot[len(key) :]] = taint
 
+    def clip(self, text: str) -> str:
+        return self.analysis.text(text, self.where) if self.analysis else text
+
     def text_of(self, node: Node, seen: frozenset[str] = frozenset()) -> str:
+        if self.analysis and not self.analysis.visit(1, self.where):
+            return ""
         text = " ".join(node_text(c) for c in walk(node) if c.type == "string_fragment")
-        if len(seen) > 8:
+        text = self.clip(text)
+        if len(seen) > limits.MAX_ALIAS_DEPTH:
+            if self.analysis:
+                self.analysis.limit("alias-depth", self.where, "literal alias depth limit reached")
             return text
         for item in walk(node):
             key = _slot(item)
             if key in self.values and key not in seen:
                 for value in self.values[key]:
-                    text += " " + self.text_of(value, seen | {key})
+                    text = self.clip(text + " " + self.text_of(value, seen | {key}))
         if node.type == "call_expression" and self.returns:
             for inner, value in self.returns(node, self):
-                text += " " + inner.text_of(value, seen)
+                text = self.clip(text + " " + inner.text_of(value, seen))
         return text
 
     def taint_of(self, node: Node | None) -> tuple[Shape, str] | None:
         if node is None:
             return None
-        if node.id in self.visiting or len(self.visiting) > 40:
+        if self.analysis and not self.analysis.visit(1, self.where):
+            return None
+        if len(self.visiting) > limits.MAX_EXPRESSION_DEPTH:
+            if self.analysis:
+                self.analysis.limit(
+                    "expression-depth", self.where, "expression depth limit reached"
+                )
+            return None
+        if node.id in self.visiting:
             return None
         self.visiting.add(node.id)
         try:
@@ -390,7 +422,11 @@ def _host_is_tainted(node: Node | None, flow: _Flow, seen: frozenset[str] = froz
     if node is None:
         return False
     key = _slot(node)
-    if key and key in flow.values and key not in seen and len(seen) < 8:
+    if key and key in flow.values and key not in seen:
+        if len(seen) >= limits.MAX_ALIAS_DEPTH:
+            if flow.analysis:
+                flow.analysis.limit("alias-depth", flow.where, "URL alias depth limit reached")
+            return False
         return any(_host_is_tainted(value, flow, seen | {key}) for value in flow.values[key])
     if node.type == "call_expression" and flow.returns:
         return any(_host_is_tainted(value, inner) for inner, value in flow.returns(node, flow))
@@ -415,18 +451,21 @@ def _host_is_tainted(node: Node | None, flow: _Flow, seen: frozenset[str] = froz
 
 
 class _Analyzer:
-    def __init__(self, path: str, source: bytes, root: Node) -> None:
-        self.path, self.root = path, root
+    def __init__(self, path: str, source: bytes, tree: Tree) -> None:
+        self.path, self.tree, self.root = path, tree, tree.root_node
         self.lines = source.decode("utf-8", "replace").splitlines()
         self.hits: list[SourceHit] = []
-        self.return_queries = 0
+        self.analysis = Analysis()  # replaced by the shared package session
+        self.bodies: dict[int, list[Node]] = {}
+        self.summaries: dict[tuple[object, ...], list[tuple[_Flow, Node]]] = {}
+        self.active_summaries: set[tuple[object, ...]] = set()
         self.functions: dict[str, Node] = {}
         self.package: dict[str, tuple[_Analyzer, Node]] = {}  # set by analyze_package
         text = source.decode("utf-8", "replace")
         # const execAsync = promisify(exec); const run = child_process.execSync
         self.shell_aliases = {(m.group(1) or m.group(3)): (m.group(2) or m.group(4))
                               for m in _EXEC_ALIAS.finditer(text)}  # fmt: skip
-        for node in walk(root):
+        for node in walk(self.root):
             if node.type in ("function_declaration", "method_definition"):
                 self.functions.setdefault(node_text(node.child_by_field_name("name")), node)
             elif node.type == "variable_declarator":
@@ -492,18 +531,30 @@ class _Analyzer:
             source = dict(_pattern_names(params[0]))
             if source:
                 for domain in _DOMAINS:
-                    self.analyze(fn, _Flow(tool, dict(source), domain=domain), depth=0)
+                    self.analyze(fn, _Flow(tool, dict(source), domain=domain))
         return self.hits
 
-    def analyze(
-        self, fn: Node, flow: _Flow, depth: int, checked: CheckedPaths = EMPTY_CHECKED
-    ) -> None:
-        """`checked`: caller-proven paths/components, bound to specific helper parameters."""
+    def body(self, fn: Node) -> list[Node]:
+        if fn.id not in self.bodies:
+            self.bodies[fn.id] = _body(fn)
+        return self.bodies[fn.id]
+
+    def analyze(self, fn: Node, flow: _Flow, checked: CheckedPaths = EMPTY_CHECKED) -> None:
+        key = (self.path, fn.id, flow.key(), checked)
+        where = f"{self.path}:{fn.start_point[0] + 1}"
+        self.analysis.submit(key, where, partial(self.evaluate, fn, flow, checked))
+
+    def evaluate(self, fn: Node, flow: _Flow, checked: CheckedPaths) -> None:
+        flow.analysis, flow.where = self.analysis, self.path
         flow.shadowed = frozenset(self.functions)
-        flow.returns = lambda call, current: self.return_values(call, current, depth)
-        body = _body(fn)
+        flow.returns = lambda call, current: self.return_values(call, current, 0)
+        body = self.body(fn)
         self.populate(body, flow)
+        if not self.analysis.visit(len(body), self.path):
+            return
         guards = PathGuards(fn, lambda node: flow.taint_of(node) is not None, checked)
+        if guards.limited and flow.domain == "path":
+            self.analysis.limit("guards", self.path, "path-guard inference node limit reached")
         for node in body:
             if node.type in ("call_expression", "new_expression"):
                 at_flow = replace(
@@ -512,11 +563,12 @@ class _Analyzer:
                     visiting=set(),
                 )
                 self.sink(node, at_flow, guards)
-                if depth < MAX_DEPTH:
-                    self.follow(node, at_flow, depth, guards)
+                self.follow(node, at_flow, guards)
 
     def populate(self, body: list[Node], flow: _Flow) -> None:
-        for _ in range(4):
+        for _ in range(limits.MAX_PROPAGATION_PASSES):
+            if not self.analysis.visit(len(body), self.path):
+                return
             changed = False
             for node in body:
                 if node.type == "variable_declarator":
@@ -532,12 +584,10 @@ class _Analyzer:
                     )
                     changed |= flow.bind(left, right, appended=True)
             if not changed:
-                break
+                return
+        self.analysis.limit("assignments", self.path, "assignment propagation did not converge")
 
     def return_values(self, call: Node, flow: _Flow, depth: int) -> list[tuple[_Flow, Node]]:
-        self.return_queries += 1
-        if depth >= MAX_DEPTH or self.return_queries > 2048:
-            return []
         name = callee_of(call)
         local = "." not in name or name.startswith("this.") or bool(_TS_IMPORT.match(name))
         owner = self
@@ -553,21 +603,41 @@ class _Analyzer:
                 for local_name, key in _pattern_names(param):
                     inner.source[local_name], inner.shapes[local_name] = key or taint[1], taint[0]
                     inner.copy_fields(local_name, arg, flow)
-        inner.shadowed = frozenset(owner.functions)
-        inner.returns = lambda expr, current: owner.return_values(expr, current, depth + 1)
-        nodes = _body(callee)
-        owner.populate(nodes, inner)
-        returned = [
-            (inner, n.named_children[0])
-            for n in nodes
-            if n.type == "return_statement" and n.named_children
-        ]
-        body = callee.child_by_field_name("body")
-        if body is not None and body.type != "statement_block":
-            returned.append((inner, body))
-        return returned
+        key = (callee.id, inner.key(), depth)
+        if key in owner.summaries:
+            return owner.summaries[key]
+        where = f"{owner.path}:{callee.start_point[0] + 1}"
+        cycle = (callee.id, inner.key())
+        if cycle in owner.active_summaries:
+            self.analysis.limit(
+                "return-cycle", where, "recursive return summary could not be resolved"
+            )
+            return []
+        if not self.analysis.summary(depth, where):
+            return []
+        owner.active_summaries.add(cycle)
+        before = self.analysis.stops
+        try:
+            inner.analysis, inner.where = self.analysis, owner.path
+            inner.shadowed = frozenset(owner.functions)
+            inner.returns = lambda expr, current: owner.return_values(expr, current, depth + 1)
+            nodes = owner.body(callee)
+            owner.populate(nodes, inner)
+            result = [
+                (inner, n.named_children[0])
+                for n in nodes
+                if n.type == "return_statement" and n.named_children
+            ]
+            body = callee.child_by_field_name("body")
+            if body is not None and body.type != "statement_block":
+                result.append((inner, body))
+            if self.analysis.stops == before:
+                owner.summaries[key] = result
+            return result
+        finally:
+            owner.active_summaries.remove(cycle)
 
-    def follow(self, call: Node, flow: _Flow, depth: int, guards: PathGuards) -> None:
+    def follow(self, call: Node, flow: _Flow, guards: PathGuards) -> None:
         # helper(x) or this.helper(x); not child_process.exec(...) sharing a local name
         name = callee_of(call)
         if _short(name) in _CALLBACKS:
@@ -600,7 +670,7 @@ class _Analyzer:
                                 key or taint[1],
                                 taint[0],
                             )
-                self.analyze(callback, inner, depth + 1)
+                self.analyze(callback, inner)
             return
         # plain names, this.x, and TypeScript's compiled imports (`(0, tools_1.run)(...)`)
         local = "." not in name or name.startswith("this.") or bool(_TS_IMPORT.match(name))
@@ -634,7 +704,6 @@ class _Analyzer:
             owner.analyze(
                 callee,
                 inner,
-                depth + 1,
                 CheckedPaths(frozenset(protected_paths), frozenset(protected_components)),
             )
 
@@ -647,9 +716,12 @@ class _Analyzer:
         taint = flow.taint_of(first)
         tool = flow.tool
         options = " ".join(node_text(a) for a in items[1:])
-        sql_text = flow.text_of(first) if (
-            first is not None) else ""  # fmt: skip
-        is_sql = bool(_SQL_WORDS.search(sql_text))
+        is_sql = (
+            flow.domain == "sql"
+            and short in _SQL
+            and first is not None
+            and bool(_SQL_WORDS.search(flow.text_of(first)))
+        )
         if taint and taint[0] == "mixed":
             if flow.domain == "sql" and short in _SQL and is_sql:
                 self.hit(call, "sql_injection", f"tool {tool}: argument {taint[1]} is put into a "
@@ -693,22 +765,29 @@ class _Analyzer:
             self.hit(call, "path_traversal", detail)
 
 
-def analyze_package(files: list[tuple[str, bytes]]) -> list[SourceHit]:
+def analyze_package(
+    files: list[tuple[str, bytes]], *, skipped: list[str] | None = None
+) -> list[SourceHit]:
     """Hits across a package's files: handlers in one file, sinks in another."""
     analyzers: list[_Analyzer] = []
     for path, source in files:
         typescript = path.endswith((".ts", ".mts", ".cts"))
         kind = "tsx" if path.endswith(".tsx") else "ts" if typescript else "js"
-        analyzers.append(_Analyzer(path, source, parser(kind).parse(source).root_node))
+        analyzers.append(_Analyzer(path, source, parser(kind).parse(source)))
     package: dict[str, tuple[_Analyzer, Node]] = {}
     for analyzer in analyzers:
         for name, fn in analyzer.functions.items():
             package.setdefault(name, (analyzer, fn))
+    session = Analysis()
     for analyzer in analyzers:
         analyzer.package = package
+        analyzer.analysis = session
     for analyzer in analyzers:
         analyzer.run()
-    return [h for a in analyzers for h in a.hits]
+    session.drain()
+    if skipped is not None:
+        skipped.extend(session.limits.values())
+    return [h for a in analyzers for h in sorted(a.hits, key=lambda hit: hit.line)]
 
 
 def analyze(path: str, source: bytes) -> list[SourceHit]:

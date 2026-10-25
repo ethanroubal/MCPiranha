@@ -158,7 +158,7 @@ def test_malformed_source_is_inconclusive() -> None:
 
 
 @pytest.mark.parametrize("threshold", [Severity.MEDIUM, Severity.HIGH])
-@pytest.mark.parametrize("record", ["baseline", "candidate", "high-threshold"])
+@pytest.mark.parametrize("record", ["baseline", "candidate", "high-threshold", "helper-flow"])
 def test_challenge_set_does_not_regress(threshold: Severity, record: str) -> None:
     baseline = json.loads(CORPUS.with_name(f"{record}-{threshold.value}.json").read_text())
     current = run(threshold=threshold)
