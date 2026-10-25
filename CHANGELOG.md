@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Validate imported flows with 52 additional cross-domain rule/evidence and CLI checks, covering
+  SQL injection, path traversal, SSRF, shell injection and safe counterparts. Clarify import
+  resolution and partial-coverage behavior in the README.
+
+- Resolve local Python and JavaScript/TypeScript imports by module and exported symbol,
+  including aliases, namespaces, common re-exports and CommonJS/TypeScript require bindings.
+  Unrelated same-named functions and source-file order no longer select imported helpers.
+- Follow imported helper returns, callbacks and tool registrations in their defining files.
+  Local imports cannot impersonate recognized sanitizer functions.
+- Mark missing, ambiguous, cyclic or shadowed local call bindings as partial source analysis;
+  retain other findings, snapshot reasons and strict/required-coverage failures. Add 113
+  import-resolution checks and preserve the existing challenge reports separately.
+
 - Replace the two-call source-flow cutoff with cached, context-sensitive helper scheduling
   across Python and JavaScript/TypeScript files. Follow deeper sink and return chains while
   keeping safe argument and guard contexts separate.

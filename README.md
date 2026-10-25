@@ -82,10 +82,10 @@ dynamic tracing and invocation. Read it alongside the findings:
 | `skipped` | That stage did not run, such as tool listing during a static scan |
 | `failed` / `unknown` | The stage failed or its completeness cannot be established |
 
-Helper flows use a cached work queue. When context, return-summary, node, guard-inference or
-finding limits are reached, findings already collected are retained and source coverage is
-marked **partial**. Saved snapshots retain those limitations. Completion does not establish
-that arbitrary dynamic calls, custom classes or validators were understood.
+Helper flows follow local import aliases, namespaces and common re-exports using a cached work
+queue. Unresolved local bindings or exhausted analysis/finding budgets mark source coverage
+**partial**, retaining findings and snapshot limitations. Completion does not establish that
+arbitrary dynamic calls, custom classes or validators were understood.
 
 ### Use in CI
 

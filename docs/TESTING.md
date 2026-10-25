@@ -152,3 +152,28 @@ vulnerable/fixed release pairs pass. The three pinned package scans keep the sam
 filesystem now reports an unresolved recursive return summary as partial coverage, while
 everything and time remain completed. This is a correction to completeness reporting, not a
 new vulnerability finding.
+
+
+### Local import resolution
+
+`uv run pytest -q tests/test_import_resolution.py` runs 113 development regressions. Equivalent
+Python and JavaScript/TypeScript shell flows use named/aliased/namespace imports, return helpers
+and safe counterparts. Same-named safe/unsafe decoys are tested in both input-file orders.
+Unimported and external functions must not resolve to unrelated package functions.
+
+Additional cases cover package entrypoints and re-exports, CommonJS exports and TypeScript
+interop wrappers, imported callbacks and tool registrations, locally imported fake sanitizers,
+non-exported functions, literal constant methods, missing/ambiguous/cyclic bindings, reassigned
+callables, a forced resolution limit, snapshot replay and the actual CLI coverage/strict gate.
+The module resolver reads supplied source only and executes no imports.
+
+`evaluation/import-flow-{medium,high}.json` records the unchanged 64-case development corpus.
+The new import cases were written while implementing the fix; they are not a held-out set.
+Independent project-separated, independently reviewed validation remains outstanding.
+
+
+`uv run pytest -q tests/test_import_detection.py` adds 52 cross-domain checks: imported SQL,
+path and SSRF sinks/return values with safe twins, plus all four injection families through
+real CLI high-threshold gates. Assertions cover relevant rule, severity, confidence, exact
+source file/line, evidence, completed coverage and unsafe/safe exit codes. These are development
+regressions, not independent deployment accuracy measurements.

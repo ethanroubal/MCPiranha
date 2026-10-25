@@ -62,7 +62,10 @@ only when written, since deny-lists and installers are full of both.
 (`server.tool(...)`, `registerTool`, `@mcp.tool()`, low-level `call_tool` handlers) through
 assignments, simple object/dictionary fields and aliases, common array/iterable callbacks, and
 helper arguments/returns across the package's files using cached contexts and a bounded work
-queue. **SRC-101** command injection,
+queue. Module-level local imports bind to files and symbols, including aliases, namespaces,
+Python package entrypoints, ESM re-exports/default exports, and common CommonJS/TypeScript
+`require` bindings. Imported callbacks and tool registrations use their defining module.
+Unrelated same-named functions are not treated as imported helpers. **SRC-101** command injection,
 **SRC-102** SQL injection, **SRC-103** path traversal, **SRC-104** SSRF. Only input spliced into
 code the developer wrote counts: ``execSync(`git log ${branch}`)`` is reported, a shell tool
 running the `command` it's given is a capability (the toxic-flow rules cover that), not a bug.
@@ -91,6 +94,17 @@ instead of a fixed two-call cutoff. Per-language/package limits are 4,096 helper
 propagation passes and 65,536 inferred literal characters. Guard inference retains its
 2,000-node limit. Expression inference stops beyond 40 nested evaluations and literal/URL
 alias inference after eight bindings. Source findings are capped at 100 per package and 300 with dependencies.
+
+Import/re-export resolution is capped at 64 steps. Missing or ambiguous local bindings,
+unresolved local exports, re-export cycles and handler-local reassignment/shadowing of imported
+callables also mark analysis partial. Recognized methods on literal exported constants do not
+create unresolved-function warnings. External libraries without supplied source are outside
+this local resolver; their ordinary calls are not reported as missing project modules.
+
+Resolution is static, not a language runtime. Function-scoped imports, dynamic imports/requires,
+custom import hooks, TypeScript path mappings, conditional exports, arbitrary object/class
+methods and complex rebinding remain limitations. Python wildcard imports do not model custom
+`__all__` behavior. Same-file lexical scope and runtime module search paths can require review.
 
 Exhausted limits retain findings and mark source coverage partial, with a warning that fails
 `--strict`. Snapshots preserve these reasons. Arbitrary object methods, dynamic dispatch and

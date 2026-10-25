@@ -3,8 +3,8 @@
 Tool handlers are found by how servers register them (`@server.tool()`, `server.add_tool(fn)`,
 the low-level `@server.call_tool()` and its `arguments` dict). Their parameters are tainted, and
 taint follows assignments, simple dictionary fields, common iterable callbacks and helper
-arguments/returns across package files (two levels). Values are tracked conservatively across
-assignments; this is not a full control-flow or heap analysis.
+arguments/returns across package files using bounded cached contexts. Values are tracked
+conservatively across assignments; this is not a full control-flow or heap analysis.
 
 What's reported is injection, not capability. Every value gets a shape:
 
@@ -30,6 +30,7 @@ from typing import Literal
 from mcpiranha.core.models import SourceHit, SourceHitKind
 from mcpiranha.source import analysis as limits
 from mcpiranha.source.analysis import Analysis
+from mcpiranha.source.modules import Graph, python_module
 from mcpiranha.source.path_guards_python import EMPTY_CHECKED, CheckedPaths, PathGuards
 from mcpiranha.source.shell_context import advance
 
@@ -410,11 +411,35 @@ class _Analyzer:
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 self.functions.setdefault(node.name, node)
-        # modules imported here (`from . import tools`): tools.run(x) may be in another file
-        imports = [n for n in ast.walk(tree) if isinstance(n, (ast.Import, ast.ImportFrom))]
-        self.modules = {(a.asname or a.name).split(".")[0] for n in imports for a in n.names}
-        # every function in the package, set by analyze_package
-        self.package: dict[str, tuple[_Analyzer, ast.FunctionDef | ast.AsyncFunctionDef]] = {}
+        self.graph = Graph([])  # bound to the supplied package files before analysis
+        self.package: dict[str, _Analyzer] = {}
+
+    def resolve(
+        self, name: str, flow: _Flow | None = None
+    ) -> tuple[_Analyzer, ast.FunctionDef | ast.AsyncFunctionDef] | None:
+        if name.startswith(("self.", "cls.")):
+            name = name.split(".", 1)[1]
+        root = name.split(".")[0]
+        if (
+            flow is not None
+            and root in self.graph.local_bindings(self.path)
+            and (root in flow.values or root in flow.source)
+        ):
+            self.analysis.limit(
+                f"import-shadow:{self.path}:{root}",
+                self.path,
+                f"local import {root} is shadowed or reassigned in this handler",
+            )
+            return None
+        result = self.graph.resolve(self.path, name)
+        if result.reason:
+            self.analysis.limit(f"import:{self.path}:{name}", self.path, result.reason)
+        if result.target:
+            path, symbol = result.target
+            owner = self.package[path]
+            if symbol in owner.functions:
+                return owner, owner.functions[symbol]
+        return None
 
     def hit(self, node: ast.AST, kind: SourceHitKind, detail: str) -> None:
         line = getattr(node, "lineno", 1)
@@ -424,26 +449,37 @@ class _Analyzer:
         self.hits.append(SourceHit(kind=kind, file=self.path, line=line, code=code[:200],
                                    detail=detail))  # fmt: skip
 
-    def handlers(self) -> list[tuple[str, ast.FunctionDef | ast.AsyncFunctionDef, list[str]]]:
-        """(tool name, function, tainted parameter names)."""
-        out: list[tuple[str, ast.FunctionDef | ast.AsyncFunctionDef, list[str]]] = []
-        registered = {a.id for n in ast.walk(self.tree) if isinstance(n, ast.Call)
+    def handlers(
+        self,
+    ) -> list[tuple[str, _Analyzer, ast.FunctionDef | ast.AsyncFunctionDef, list[str]]]:
+        """(tool name, defining analyzer, function, tainted parameter names)."""
+        out: list[tuple[str, _Analyzer, ast.FunctionDef | ast.AsyncFunctionDef, list[str]]] = []
+        registered = {_name(a) for n in ast.walk(self.tree) if isinstance(n, ast.Call)
                       and _short(n.func) == "add_tool"
-                      for a in n.args[:1] if isinstance(a, ast.Name)}  # fmt: skip
+                      for a in n.args[:1] if isinstance(a, (ast.Name, ast.Attribute))}  # fmt: skip
         for fn in self.functions.values():
             names = {_short(d) for d in fn.decorator_list}
             params = [a.arg for a in [*fn.args.posonlyargs, *fn.args.args, *fn.args.kwonlyargs]
                       if a.arg not in _CONTEXT_PARAMS]  # fmt: skip
             if "call_tool" in names:  # low-level server: (name, arguments)
-                out.append(("call_tool", fn, params[1:] or params))
+                out.append(("call_tool", self, fn, params[1:] or params))
             elif "tool" in names or fn.name in registered:
-                out.append((fn.name, fn, params))
+                out.append((fn.name, self, fn, params))
+        for name in registered - self.functions.keys():
+            if resolved := self.resolve(name):
+                owner, fn = resolved
+                params = [
+                    a.arg
+                    for a in [*fn.args.posonlyargs, *fn.args.args, *fn.args.kwonlyargs]
+                    if a.arg not in _CONTEXT_PARAMS
+                ]
+                out.append((name, owner, fn, params))
         return out
 
     def run(self) -> list[SourceHit]:
-        for tool, fn, params in self.handlers():
+        for tool, owner, fn, params in self.handlers():
             for domain in _DOMAINS:
-                self.analyze(tool, fn, _Flow(tool, {p: p for p in params}, domain=domain))
+                owner.analyze(tool, fn, _Flow(tool, {p: p for p in params}, domain=domain))
         return self.hits
 
     def body(self, fn: ast.AST) -> list[ast.AST]:
@@ -460,7 +496,7 @@ class _Analyzer:
 
     def evaluate(self, tool: str, fn: ast.AST, flow: _Flow, checked: CheckedPaths) -> None:
         flow.analysis, flow.where = self.analysis, self.path
-        flow.shadowed = frozenset(self.functions)
+        flow.shadowed = frozenset(self.functions) | self.graph.local_bindings(self.path)
         flow.returns = lambda call, current: self.return_values(call, current, 0)
         body = self.body(fn)
         self.populate(body, flow)
@@ -500,15 +536,10 @@ class _Analyzer:
         self.analysis.limit("assignments", self.path, "assignment propagation did not converge")
 
     def return_values(self, call: ast.Call, flow: _Flow, depth: int) -> list[tuple[_Flow, ast.AST]]:
-        func = call.func
-        base = _name(func.value) if isinstance(func, ast.Attribute) else ""
-        local = isinstance(func, ast.Name) or base in ("self", "cls")
-        owner = self
-        callee = self.functions.get(_short(func)) if local else None
-        if callee is None and (local or base in self.modules) and _short(func) in self.package:
-            owner, callee = self.package[_short(func)]
-        if callee is None:
+        resolved = self.resolve(_name(call.func), flow)
+        if resolved is None:
             return []
+        owner, callee = resolved
         params = [
             a.arg
             for a in [*callee.args.posonlyargs, *callee.args.args]
@@ -539,7 +570,7 @@ class _Analyzer:
         before = self.analysis.stops
         try:
             inner.analysis, inner.where = self.analysis, owner.path
-            inner.shadowed = frozenset(owner.functions)
+            inner.shadowed = frozenset(owner.functions) | owner.graph.local_bindings(owner.path)
             inner.returns = lambda expr, current: owner.return_values(expr, current, depth + 1)
             nodes = owner.body(callee)
             owner.populate(nodes, inner)
@@ -561,11 +592,13 @@ class _Analyzer:
             callback = next((k.value for k in call.keywords if k.arg == "key"), None)
             inputs = [call.args[0]]
         if callback is not None:
-            fn = (
-                callback
-                if isinstance(callback, ast.Lambda)
-                else self.functions.get(_name(callback))
+            resolved = (
+                self.resolve(_name(callback), flow)
+                if not isinstance(callback, ast.Lambda)
+                else None
             )
+            owner, fn = resolved if resolved else (self, callback)
+
             if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
                 inner = replace(
                     flow,
@@ -586,18 +619,13 @@ class _Analyzer:
                     }
                     if taint := flow.taint_of(value):
                         inner.source[name], inner.shapes[name] = taint[1], taint[0]
-                self.analyze(flow.tool, fn, inner)
+                owner.analyze(flow.tool, fn, inner)
             return
         # helper(x) or self.helper(x); not subprocess.run(...) that shares a local name
-        func = call.func
-        base = _name(func.value) if isinstance(func, ast.Attribute) else ""
-        local = isinstance(func, ast.Name) or base in ("self", "cls")
-        owner: _Analyzer = self
-        callee = self.functions.get(_short(func)) if local else None
-        if callee is None and (local or base in self.modules) and _short(func) in self.package:
-            owner, callee = self.package[_short(func)]  # defined in another file
-        if callee is None:
+        resolved = self.resolve(_name(call.func), flow)
+        if resolved is None:
             return
+        owner, callee = resolved
         params = [a.arg for a in [*callee.args.posonlyargs, *callee.args.args]
                   if a.arg not in _CONTEXT_PARAMS]  # fmt: skip
         inner = _Flow(flow.tool, {}, domain=flow.domain, quote_context=flow.quote_context)
@@ -705,13 +733,12 @@ def analyze_package(
         except (SyntaxError, ValueError):
             continue
         analyzers.append(_Analyzer(path, tree, text.splitlines()))
-    package: dict[str, tuple[_Analyzer, ast.FunctionDef | ast.AsyncFunctionDef]] = {}
-    for analyzer in analyzers:
-        for name, fn in analyzer.functions.items():
-            package.setdefault(name, (analyzer, fn))
+    package = {analyzer.path: analyzer for analyzer in analyzers}
+    graph = Graph([python_module(a.path, a.tree, set(a.functions)) for a in analyzers])
     session = Analysis()
     for analyzer in analyzers:
         analyzer.package = package
+        analyzer.graph = graph
         analyzer.analysis = session
     for analyzer in analyzers:
         analyzer.run()

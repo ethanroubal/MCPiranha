@@ -6,7 +6,7 @@ FastMCP-TS `addTool({ name, execute })`, and the low-level
 The first parameter is tainted: destructured names (`({ path, url })`) or the whole object
 (`args.path`, `request.params.arguments.path`). Taint follows declarations, assignments and
 simple object fields/aliases, common array callbacks and helper arguments/returns across package
-files (two levels). This is not a full control-flow or heap analysis.
+files using bounded cached contexts. This is not a full control-flow or heap analysis.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from mcpiranha.core.models import SourceHit, SourceHitKind
 from mcpiranha.source import analysis as limits
 from mcpiranha.source.analysis import Analysis
 from mcpiranha.source.javascript import Node, callee_of, node_text, parser, string_value, walk
+from mcpiranha.source.modules import Graph, javascript_module
 from mcpiranha.source.path_guards_javascript import PathGuards
 from mcpiranha.source.path_guards_python import EMPTY_CHECKED, CheckedPaths
 from mcpiranha.source.shell_context import advance
@@ -50,7 +51,6 @@ _EXEC_ALIAS = re.compile(
     r"(?:\(0,\s*)?(?:[\w$.]*\.)?(exec|execFile)\b"
     r"|\b(?:const|let|var)\s+([\w$]+)\s*=\s*(?:[\w$.]*\.)?(exec|execSync)\s*[;,\n]"
 )
-_TS_IMPORT = re.compile(r"^[\w$]+_\d+\.[\w$]+$")  # tools_1.run, from `(0, tools_1.run)(...)`
 _SHELL = frozenset({"exec", "execSync"})
 _SPAWN = frozenset({"spawn", "spawnSync", "execFile", "execFileSync", "execa", "execaSync"})
 _ALWAYS_SHELL = frozenset({"execaCommand", "execaCommandSync"})
@@ -239,15 +239,15 @@ class _Flow:
                 return ("based" if i > 0 else shape), arg
             if callee in ("String", "decodeURIComponent"):
                 return self.taint_of(arg_nodes[0]) if arg_nodes else None
-            func = node.child_by_field_name("function")
-            if func is not None and func.type == "member_expression":
-                # x.trim(), x.toLowerCase(), parts.join(" ")
-                return self.taint_of(func.child_by_field_name("object"))
             if self.returns:
                 returned = self.returns(node, self)
                 if returned:
                     found = [t for inner, value in returned if (t := inner.taint_of(value))]
                     return max(found, key=lambda t: _RANK[t[0]]) if found else None
+            func = node.child_by_field_name("function")
+            if func is not None and func.type == "member_expression":
+                # x.trim(), x.toLowerCase(), parts.join(" ")
+                return self.taint_of(func.child_by_field_name("object"))
             found = [t for value in arg_nodes if (t := self.taint_of(value))]
             return max(found, key=lambda t: _RANK[t[0]]) if found else None
         if kind == "object":
@@ -460,18 +460,65 @@ class _Analyzer:
         self.summaries: dict[tuple[object, ...], list[tuple[_Flow, Node]]] = {}
         self.active_summaries: set[tuple[object, ...]] = set()
         self.functions: dict[str, Node] = {}
-        self.package: dict[str, tuple[_Analyzer, Node]] = {}  # set by analyze_package
+        self.package: dict[str, _Analyzer] = {}  # set by analyze_package
+        self.graph = Graph([])
         text = source.decode("utf-8", "replace")
         # const execAsync = promisify(exec); const run = child_process.execSync
         self.shell_aliases = {(m.group(1) or m.group(3)): (m.group(2) or m.group(4))
                               for m in _EXEC_ALIAS.finditer(text)}  # fmt: skip
         for node in walk(self.root):
             if node.type in ("function_declaration", "method_definition"):
-                self.functions.setdefault(node_text(node.child_by_field_name("name")), node)
+                if name := node_text(node.child_by_field_name("name")):
+                    self.functions.setdefault(name, node)
             elif node.type == "variable_declarator":
                 value = node.child_by_field_name("value")
                 if value is not None and value.type in _FUNCTIONS:
                     self.functions.setdefault(node_text(node.child_by_field_name("name")), value)
+
+        for node in self.root.named_children:
+            if node.type == "export_statement":
+                fn = node.child_by_field_name("declaration") or node.child_by_field_name("value")
+                if (
+                    fn is not None
+                    and fn.type in _FUNCTIONS
+                    and not node_text(fn.child_by_field_name("name"))
+                ):
+                    self.functions["default"] = fn
+            elif node.type == "expression_statement" and node.named_children:
+                assignment = node.named_children[0]
+                right = assignment.child_by_field_name("right")
+                left = node_text(assignment.child_by_field_name("left"))
+                if (
+                    right is not None
+                    and right.type in _FUNCTIONS
+                    and left.startswith(("exports.", "module.exports"))
+                ):
+                    self.functions[left] = right
+
+    def resolve(self, name: str, flow: _Flow | None = None) -> tuple[_Analyzer, Node] | None:
+        if name.startswith("this."):
+            name = name.removeprefix("this.")
+        root = name.split(".")[0]
+        if (
+            flow is not None
+            and root in self.graph.local_bindings(self.path)
+            and (root in flow.values or root in flow.source)
+        ):
+            self.analysis.limit(
+                f"import-shadow:{self.path}:{root}",
+                self.path,
+                f"local import {root} is shadowed or reassigned in this handler",
+            )
+            return None
+        result = self.graph.resolve(self.path, name)
+        if result.reason:
+            self.analysis.limit(f"import:{self.path}:{name}", self.path, result.reason)
+        if result.target:
+            path, symbol = result.target
+            owner = self.package[path]
+            if symbol in owner.functions:
+                return owner, owner.functions[symbol]
+        return None
 
     def hit(self, node: Node, kind: SourceHitKind, detail: str) -> None:
         row, column = node.start_point
@@ -483,18 +530,20 @@ class _Analyzer:
         self.hits.append(SourceHit(kind=kind, file=self.path, line=row + 1, code=line.strip(),
                                    detail=detail))  # fmt: skip
 
-    def _function(self, node: Node | None) -> Node | None:
+    def _function(
+        self, node: Node | None, flow: _Flow | None = None
+    ) -> tuple[_Analyzer, Node] | None:
         """A function literal, or the function a name refers to (`registerTool(n, c, execute)`)."""
         if node is None:
             return None
         if node.type in _FUNCTIONS:
-            return node
-        if node.type == "identifier":
-            return self.functions.get(node_text(node))
+            return self, node
+        if node.type in ("identifier", "member_expression"):
+            return self.resolve(node_text(node), flow)
         return None
 
-    def handlers(self) -> list[tuple[str, Node]]:
-        out: list[tuple[str, Node]] = []
+    def handlers(self) -> list[tuple[str, _Analyzer, Node]]:
+        out: list[tuple[str, _Analyzer, Node]] = []
         for node in walk(self.root):
             if node.type != "call_expression":
                 continue
@@ -512,7 +561,7 @@ class _Analyzer:
                     fn = self._function(items[-1]) if len(items) > 1 else None
                     name = string_value(items[0]) or node_text(items[0])
                 if fn is not None:
-                    out.append((name or "tool", fn))
+                    out.append((name or "tool", *fn))
             elif (
                 callee == "setRequestHandler"
                 and len(items) == 2
@@ -520,18 +569,18 @@ class _Analyzer:
             ):
                 fn = self._function(items[1])
                 if fn is not None:
-                    out.append(("call_tool", fn))
+                    out.append(("call_tool", *fn))
         return out
 
     def run(self) -> list[SourceHit]:
-        for tool, fn in self.handlers():
+        for tool, owner, fn in self.handlers():
             params = _params(fn)
             if not params:
                 continue
             source = dict(_pattern_names(params[0]))
             if source:
                 for domain in _DOMAINS:
-                    self.analyze(fn, _Flow(tool, dict(source), domain=domain))
+                    owner.analyze(fn, _Flow(tool, dict(source), domain=domain))
         return self.hits
 
     def body(self, fn: Node) -> list[Node]:
@@ -546,7 +595,7 @@ class _Analyzer:
 
     def evaluate(self, fn: Node, flow: _Flow, checked: CheckedPaths) -> None:
         flow.analysis, flow.where = self.analysis, self.path
-        flow.shadowed = frozenset(self.functions)
+        flow.shadowed = frozenset(self.functions) | self.graph.local_bindings(self.path)
         flow.returns = lambda call, current: self.return_values(call, current, 0)
         body = self.body(fn)
         self.populate(body, flow)
@@ -588,15 +637,11 @@ class _Analyzer:
         self.analysis.limit("assignments", self.path, "assignment propagation did not converge")
 
     def return_values(self, call: Node, flow: _Flow, depth: int) -> list[tuple[_Flow, Node]]:
-        name = callee_of(call)
-        local = "." not in name or name.startswith("this.") or bool(_TS_IMPORT.match(name))
-        owner = self
-        callee = self.functions.get(_short(name)) if local else None
-        if callee is None and local and _short(name) in self.package:
-            owner, callee = self.package[_short(name)]
+        resolved = self.resolve(callee_of(call), flow)
         args = call.child_by_field_name("arguments")
-        if callee is None or args is None:
+        if resolved is None or args is None:
             return []
+        owner, callee = resolved
         inner = _Flow(flow.tool, {}, domain=flow.domain, quote_context=flow.quote_context)
         for param, arg in zip(_params(callee), args.named_children, strict=False):
             if taint := flow.taint_of(arg):
@@ -619,7 +664,7 @@ class _Analyzer:
         before = self.analysis.stops
         try:
             inner.analysis, inner.where = self.analysis, owner.path
-            inner.shadowed = frozenset(owner.functions)
+            inner.shadowed = frozenset(owner.functions) | owner.graph.local_bindings(owner.path)
             inner.returns = lambda expr, current: owner.return_values(expr, current, depth + 1)
             nodes = owner.body(callee)
             owner.populate(nodes, inner)
@@ -645,8 +690,9 @@ class _Analyzer:
             func = call.child_by_field_name("function")
             receiver = func.child_by_field_name("object") if func is not None else None
             args_list = args_node.named_children if args_node is not None else []
-            callback = self._function(args_list[0]) if args_list else None
+            callback = self._function(args_list[0], flow) if args_list else None
             if callback is not None:
+                owner, callback_fn = callback
                 inner = replace(
                     flow,
                     source=dict(flow.source),
@@ -657,7 +703,7 @@ class _Analyzer:
                     visiting=set(),
                 )
                 taint = flow.taint_of(receiver)
-                for index, param in enumerate(_params(callback)):
+                for index, param in enumerate(_params(callback_fn)):
                     for local_name, key in _pattern_names(param):
                         inner.source.pop(local_name, None)
                         inner.shapes.pop(local_name, None)
@@ -670,17 +716,14 @@ class _Analyzer:
                                 key or taint[1],
                                 taint[0],
                             )
-                self.analyze(callback, inner)
+                owner.analyze(callback_fn, inner)
             return
         # plain names, this.x, and TypeScript's compiled imports (`(0, tools_1.run)(...)`)
-        local = "." not in name or name.startswith("this.") or bool(_TS_IMPORT.match(name))
-        owner: _Analyzer = self
-        callee = self.functions.get(_short(name)) if local else None
-        if callee is None and local and _short(name) in self.package:
-            owner, callee = self.package[_short(name)]  # defined in another file
+        resolved = self.resolve(name, flow)
         args = call.child_by_field_name("arguments")
-        if callee is None or args is None:
+        if resolved is None or args is None:
             return
+        owner, callee = resolved
         inner = _Flow(flow.tool, {}, domain=flow.domain, quote_context=flow.quote_context)
         protected_paths: set[str] = set()
         protected_components: set[str] = set()
@@ -774,13 +817,12 @@ def analyze_package(
         typescript = path.endswith((".ts", ".mts", ".cts"))
         kind = "tsx" if path.endswith(".tsx") else "ts" if typescript else "js"
         analyzers.append(_Analyzer(path, source, parser(kind).parse(source)))
-    package: dict[str, tuple[_Analyzer, Node]] = {}
-    for analyzer in analyzers:
-        for name, fn in analyzer.functions.items():
-            package.setdefault(name, (analyzer, fn))
+    package = {analyzer.path: analyzer for analyzer in analyzers}
+    graph = Graph([javascript_module(a.path, a.root, set(a.functions)) for a in analyzers])
     session = Analysis()
     for analyzer in analyzers:
         analyzer.package = package
+        analyzer.graph = graph
         analyzer.analysis = session
     for analyzer in analyzers:
         analyzer.run()

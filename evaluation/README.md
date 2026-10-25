@@ -239,3 +239,34 @@ Remaining gaps include heuristic module/name resolution, limited callback APIs, 
 class/heap behavior, dynamic dispatch, custom validators, branch/mutation precision and runtime
 conditions. The earlier four-pass/two-call bounds describe the preceding implementation, not
 the current one. Independent project-separated validation remains the next quality priority.
+
+
+## Local import-resolution follow-up
+
+`import-flow-medium.json` and `import-flow-high.json` preserve the identical corpus and earlier
+reports: 32/32 attacks detected, 0/32 benign alerts and no incomplete cases at either threshold.
+This development corpus did not test imported aliases or colliding module function names.
+
+Read-only probes before implementation found that direct imports alerted, while aliased
+Python/JavaScript imports and JavaScript namespace calls missed the same shell-injection flow.
+A Python safe/unsafe same-name pair changed detection when its source-file order was reversed.
+Those misses reported no analysis limitation. A module/symbol binding graph now replaces the
+package-wide first-name match. Namespace helper returns are evaluated before generic object
+method propagation. Imported callbacks and registrations use their defining analyzer, and
+local sanitizer lookalikes do not suppress findings.
+
+`tests/test_import_resolution.py` adds 113 developer-authored regressions with safe twins,
+file-order permutations, re-export/require variants, coverage and CLI checks. Resolution is
+bounded; local missing/ambiguous/cyclic/reassigned call bindings report partial coverage.
+No package code is imported or executed. These checks demonstrate the specific correction;
+they are not an independent estimate of detection performance.
+
+The same two vulnerable/fixed registry pairs remain passing. Static smoke scans of filesystem
+2.0.0, everything 2.0.0 and time 2026.10.19 retain the previous findings across 58 files:
+filesystem and time have no findings; everything retains one high SRC-002 finding. Filesystem
+retains its documented recursive-return partial coverage; everything and time are completed.
+
+Dynamic loading, custom resolvers, complex scope/rebinding, arbitrary classes and runtime
+search-path differences remain outside this binding model. See [usage limits](../docs/USAGE.md#source-analysis).
+The next quality priority is independent project-separated validation, with labels reviewed
+without tuning detectors to those cases.
