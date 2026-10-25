@@ -120,7 +120,8 @@ def test_javascript_injection(handler: str, kind: str) -> None:
         'db.query("SELECT * FROM t WHERE name = $1", [arg]);',
         "db.query(arg);",
         "fs.readFileSync(arg);",
-        "const f = path.resolve(ROOT, arg); if (!f.startsWith(ROOT)) throw 1; fs.readFileSync(f);",
+        "const base = path.resolve(ROOT); const f = path.resolve(ROOT, arg); "
+        "if (!f.startsWith(base + path.sep)) throw 1; fs.readFileSync(f);",
         "fetch(`https://api.example.invalid/v1/${arg}`);",
         "fetch(arg);",
         "execSync(`echo ${Number(arg)}`);",
@@ -152,12 +153,15 @@ def test_containment_in_a_caller_covers_the_helper() -> None:
         "import os\n"
         "def read_events(path):\n    return open(path).read()\n"
         "@server.tool()\ndef status(run_id):\n"
-        "    if '/' in run_id or run_id.startswith('.'):\n        return 'invalid'\n"
+        "    if '/' in run_id or '\\\\' in run_id or run_id.startswith('.'):\n"
+        "        return 'invalid'\n"
         "    return read_events(os.path.join(RUNS, run_id, 'events.jsonl'))\n"
     )
     assert tpy.analyze("m.py", code) == []
     unchecked = code.replace(
-        "    if '/' in run_id or run_id.startswith('.'):\n        return 'invalid'\n", ""
+        "    if '/' in run_id or '\\\\' in run_id or run_id.startswith('.'):\n"
+        "        return 'invalid'\n",
+        "",
     )
     assert _kinds(tpy.analyze("m.py", unchecked)) == {"path_traversal"}
 

@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+- Classify unguarded handler-to-filesystem and handler-to-URL-host flows as high-impact risk,
+  retaining medium static-analysis confidence and the existing capability/safety exclusions.
+- Escalate nearby authority/authorization overrides paired with harmful actions, explicit
+  deception, and failure/success contradictions about the same execution. Keep isolated,
+  unrelated, negated, quoted and retry/new-execution cases below high.
+- Recognize bound credential exports, including explicit content/pronoun references and a
+  small set of French transfer verbs. A credential mention near an unrelated outward message
+  no longer suffices for a high credential finding.
+- Add 99 severity/control/CLI regressions and preserve earlier evaluation stages separately
+  from the high-threshold reports; the unchanged corpus now catches 32/32 attacks at high.
+
+- Follow simple object/dictionary fields and aliases, iterable callbacks and helper return
+  values through injection analysis. Retain assignment alternatives so later safe values
+  cannot erase an earlier unsafe SQL/URL use; isolate uncalled nested function scopes.
+- Apply sanitizers per sink and shell quote context. Recognize only dominating, unchanged
+  small literal allowlists; ignored checks and arbitrary validator names are not safety proofs.
+- Detect additional authorization bypass, deceptive reporting, answer contamination and
+  credential-in-URL instructions, plus CSS resource URLs. Reduce medium-severity noise from
+  explicitly rejected attack quotations, public identifiers and numeric image cache versions.
+- Preserve the 64-case evaluation baseline and record candidate results separately. Add
+  generalization/benign-control regressions and opt-in vulnerable/fixed release tests.
+
+- Replace function-wide path-containment keywords with value-specific, preceding guard
+  recognition in Python and JavaScript/TypeScript. Reject ignored/late/wrong-path checks,
+  weak prefixes, changed bindings and portable component guards missing a separator.
+- Carry caller protection only to the particular checked helper argument; retain aliases
+  and remove protection after reassignment. Bound guard inference to 2,000 syntax nodes.
+- Add 78 path-guard adversarial and benign cases, including static CLI finding/evidence checks.
+
 ## 0.3.0 — 2026-10-24
 
 - Inspect npm/PyPI metadata and verified source archives without `--connect`, installation,

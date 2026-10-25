@@ -103,12 +103,33 @@ only when written, since deny-lists and installers are full of both.
 
 **Exploitable tool handlers** (taint analysis): tool arguments are followed from the handler
 (`server.tool(...)`, `registerTool`, `@mcp.tool()`, low-level `call_tool` handlers) through
-assignments and into functions across the package's files. **SRC-101** command injection,
+assignments, simple object/dictionary fields and aliases, common array/iterable callbacks, and
+helper arguments/returns across the package's files (two calls deep). **SRC-101** command injection,
 **SRC-102** SQL injection, **SRC-103** path traversal, **SRC-104** SSRF. Only input spliced into
 code the developer wrote counts: ``execSync(`git log ${branch}`)`` is reported, a shell tool
 running the `command` it's given is a capability (the toxic-flow rules cover that), not a bug.
 It flags the vulnerable releases of two servers with published command-injection CVEs, and
 stays quiet on their fixes.
+
+Path guards are matched to the value being used and must execute before the file operation.
+Recognized patterns include resolved Python paths checked with `is_relative_to`/`relative_to`,
+normalized JavaScript paths checked against a normalized base plus `path.sep`, and filename
+component rejection (both separators and dot traversal for portable paths). A label, comment,
+ignored boolean check, weak string prefix or check on another path does not suppress a finding.
+Protection passed to helpers is specific to the checked argument. Custom validators and more
+complex control flow can still require manual review; this does not prove filesystem safety
+against symlink races or arbitrary side effects.
+
+Unguarded paths joined to an intended base and input inserted into a request's host are high
+severity risks (SRC-103/SRC-104), with medium static-analysis confidence. They now affect the
+normal `--fail-on high` gate; recognized safe cases and whole-input capabilities remain excluded.
+
+Sanitizers are evaluated for the sink: shell quoting does not make a path, SQL fragment or
+hostname safe. Quoting inside existing shell quotes is not accepted as protection. Small
+literal allowlists can suppress findings only when they reject unsafe values before use and
+the checked binding remains unchanged. Arbitrary object methods, dynamic dispatch, custom
+validators and deep call chains remain limitations. Detection-quality measurements and their
+limits are documented in [the evaluation report](evaluation/README.md).
 
 ### Server behavior during a session
 

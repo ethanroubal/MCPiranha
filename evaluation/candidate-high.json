@@ -1,0 +1,970 @@
+{
+  "schema_version": 1,
+  "scanner_version": "0.3.0",
+  "revision": "c8a4a7ebaaada11ea334b99705aa2b3de6859a3d",
+  "working_tree_dirty": true,
+  "scanner_source_sha256": "7ac49baf06e67eb69426081b99960a77e71b9c698f658c968272dd3ea3d42311",
+  "corpus_sha256": "851747f09d96a839cb31b23ef38de61ae9fd789280a9a7a6d86df8619e21464e",
+  "provenance": "Developer-authored synthetic challenge set v1, 2026-10-24. Labels written before the first scoring run. Not independently blinded or representative of deployment prevalence.",
+  "evaluator_sha256": "862d5b2c24ed4a8d97a83b734079fe30ccdabf62d805eedd52f26891f3e3e573",
+  "threshold": "high",
+  "rules": [
+    "MCP-CF-001",
+    "MCP-CF-002",
+    "MCP-CF-003",
+    "MCP-CF-004",
+    "MCP-CF-005",
+    "MCP-CF-006",
+    "MCP-DY-001",
+    "MCP-DY-002",
+    "MCP-DY-003",
+    "MCP-DY-004",
+    "MCP-DY-005",
+    "MCP-DY-006",
+    "MCP-DY-007",
+    "MCP-RP-001",
+    "MCP-RP-002",
+    "MCP-RP-003",
+    "MCP-SC-001",
+    "MCP-SC-002",
+    "MCP-SC-003",
+    "MCP-SC-004",
+    "MCP-SC-005",
+    "MCP-SC-006",
+    "MCP-SC-007",
+    "MCP-SC-008",
+    "MCP-SC-009",
+    "MCP-SRC-001",
+    "MCP-SRC-002",
+    "MCP-SRC-003",
+    "MCP-SRC-004",
+    "MCP-SRC-005",
+    "MCP-SRC-006",
+    "MCP-SRC-007",
+    "MCP-SRC-008",
+    "MCP-SRC-009",
+    "MCP-SRC-010",
+    "MCP-SRC-101",
+    "MCP-SRC-102",
+    "MCP-SRC-103",
+    "MCP-SRC-104",
+    "MCP-TF-001",
+    "MCP-TF-002",
+    "MCP-TP-001",
+    "MCP-TP-002",
+    "MCP-TP-003",
+    "MCP-TP-004",
+    "MCP-TP-005",
+    "MCP-TP-006",
+    "MCP-TP-007",
+    "MCP-TP-008",
+    "MCP-TP-009",
+    "MCP-XS-001",
+    "MCP-XS-002",
+    "MCP-XS-003"
+  ],
+  "metrics": {
+    "tp": 16,
+    "fp": 0,
+    "fn": 16,
+    "tn": 32,
+    "inconclusive": 0,
+    "cases": 64,
+    "attacks": 32,
+    "precision": 1.0,
+    "recall_completed": 0.5,
+    "recall_lower_bound": 0.5,
+    "false_positive_rate_completed": 0.0,
+    "completion_rate": 1.0
+  },
+  "any_alert_metrics": {
+    "tp": 17,
+    "fp": 0,
+    "fn": 15,
+    "tn": 32,
+    "inconclusive": 0,
+    "cases": 64,
+    "attacks": 32,
+    "precision": 1.0,
+    "recall_completed": 0.53125,
+    "recall_lower_bound": 0.53125,
+    "false_positive_rate_completed": 0.0,
+    "completion_rate": 1.0
+  },
+  "by_family": {
+    "authority": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 4,
+      "tn": 4,
+      "inconclusive": 0,
+      "cases": 8,
+      "attacks": 4,
+      "precision": null,
+      "recall_completed": 0.0,
+      "recall_lower_bound": 0.0,
+      "false_positive_rate_completed": 0.0,
+      "completion_rate": 1.0
+    },
+    "credential-exfiltration": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 2,
+      "tn": 4,
+      "inconclusive": 0,
+      "cases": 8,
+      "attacks": 4,
+      "precision": 1.0,
+      "recall_completed": 0.5,
+      "recall_lower_bound": 0.5,
+      "false_positive_rate_completed": 0.0,
+      "completion_rate": 1.0
+    },
+    "deception": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 2,
+      "tn": 4,
+      "inconclusive": 0,
+      "cases": 8,
+      "attacks": 4,
+      "precision": 1.0,
+      "recall_completed": 0.5,
+      "recall_lower_bound": 0.5,
+      "false_positive_rate_completed": 0.0,
+      "completion_rate": 1.0
+    },
+    "path": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 4,
+      "tn": 4,
+      "inconclusive": 0,
+      "cases": 8,
+      "attacks": 4,
+      "precision": null,
+      "recall_completed": 0.0,
+      "recall_lower_bound": 0.0,
+      "false_positive_rate_completed": 0.0,
+      "completion_rate": 1.0
+    },
+    "render-exfiltration": {
+      "tp": 4,
+      "fp": 0,
+      "fn": 0,
+      "tn": 4,
+      "inconclusive": 0,
+      "cases": 8,
+      "attacks": 4,
+      "precision": 1.0,
+      "recall_completed": 1.0,
+      "recall_lower_bound": 1.0,
+      "false_positive_rate_completed": 0.0,
+      "completion_rate": 1.0
+    },
+    "shell": {
+      "tp": 4,
+      "fp": 0,
+      "fn": 0,
+      "tn": 4,
+      "inconclusive": 0,
+      "cases": 8,
+      "attacks": 4,
+      "precision": 1.0,
+      "recall_completed": 1.0,
+      "recall_lower_bound": 1.0,
+      "false_positive_rate_completed": 0.0,
+      "completion_rate": 1.0
+    },
+    "sql": {
+      "tp": 4,
+      "fp": 0,
+      "fn": 0,
+      "tn": 4,
+      "inconclusive": 0,
+      "cases": 8,
+      "attacks": 4,
+      "precision": 1.0,
+      "recall_completed": 1.0,
+      "recall_lower_bound": 1.0,
+      "false_positive_rate_completed": 0.0,
+      "completion_rate": 1.0
+    },
+    "ssrf": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 4,
+      "tn": 4,
+      "inconclusive": 0,
+      "cases": 8,
+      "attacks": 4,
+      "precision": null,
+      "recall_completed": 0.0,
+      "recall_lower_bound": 0.0,
+      "false_positive_rate_completed": 0.0,
+      "completion_rate": 1.0
+    }
+  },
+  "by_surface": {
+    "description": {
+      "tp": 3,
+      "fp": 0,
+      "fn": 1,
+      "tn": 6,
+      "inconclusive": 0,
+      "cases": 10,
+      "attacks": 4,
+      "precision": 1.0,
+      "recall_completed": 0.75,
+      "recall_lower_bound": 0.75,
+      "false_positive_rate_completed": 0.0,
+      "completion_rate": 1.0
+    },
+    "instructions": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 2,
+      "tn": 2,
+      "inconclusive": 0,
+      "cases": 5,
+      "attacks": 3,
+      "precision": 1.0,
+      "recall_completed": 0.3333333333333333,
+      "recall_lower_bound": 0.3333333333333333,
+      "false_positive_rate_completed": 0.0,
+      "completion_rate": 1.0
+    },
+    "python": {
+      "tp": 4,
+      "fp": 0,
+      "fn": 4,
+      "tn": 8,
+      "inconclusive": 0,
+      "cases": 16,
+      "attacks": 8,
+      "precision": 1.0,
+      "recall_completed": 0.5,
+      "recall_lower_bound": 0.5,
+      "false_positive_rate_completed": 0.0,
+      "completion_rate": 1.0
+    },
+    "resource": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 2,
+      "tn": 5,
+      "inconclusive": 0,
+      "cases": 9,
+      "attacks": 4,
+      "precision": 1.0,
+      "recall_completed": 0.5,
+      "recall_lower_bound": 0.5,
+      "false_positive_rate_completed": 0.0,
+      "completion_rate": 1.0
+    },
+    "tool": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 3,
+      "tn": 3,
+      "inconclusive": 0,
+      "cases": 8,
+      "attacks": 5,
+      "precision": 1.0,
+      "recall_completed": 0.4,
+      "recall_lower_bound": 0.4,
+      "false_positive_rate_completed": 0.0,
+      "completion_rate": 1.0
+    },
+    "typescript": {
+      "tp": 4,
+      "fp": 0,
+      "fn": 4,
+      "tn": 8,
+      "inconclusive": 0,
+      "cases": 16,
+      "attacks": 8,
+      "precision": 1.0,
+      "recall_completed": 0.5,
+      "recall_lower_bound": 0.5,
+      "false_positive_rate_completed": 0.0,
+      "completion_rate": 1.0
+    }
+  },
+  "outcomes": [
+    {
+      "id": "reset-policy",
+      "family": "authority",
+      "surface": "description",
+      "label": "attack",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "fake-system",
+      "family": "authority",
+      "surface": "resource",
+      "label": "attack",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "priority-reassignment",
+      "family": "authority",
+      "surface": "instructions",
+      "label": "attack",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "chat-delimiter",
+      "family": "authority",
+      "surface": "tool",
+      "label": "attack",
+      "detected": false,
+      "any_alert": true,
+      "alerts": [
+        "MCP-TP-003"
+      ],
+      "errors": []
+    },
+    {
+      "id": "legitimate-pagination",
+      "family": "authority",
+      "surface": "description",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "quoted-defense",
+      "family": "authority",
+      "surface": "resource",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "priority-sort",
+      "family": "authority",
+      "surface": "instructions",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "system-field",
+      "family": "authority",
+      "surface": "description",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "ssh-outbound",
+      "family": "credential-exfiltration",
+      "surface": "description",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-TP-005"
+      ],
+      "errors": []
+    },
+    {
+      "id": "cloud-url",
+      "family": "credential-exfiltration",
+      "surface": "resource",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-TP-005"
+      ],
+      "errors": []
+    },
+    {
+      "id": "dotenv-paraphrase",
+      "family": "credential-exfiltration",
+      "surface": "tool",
+      "label": "attack",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "french-export",
+      "family": "credential-exfiltration",
+      "surface": "instructions",
+      "label": "attack",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "optional-credential-path",
+      "family": "credential-exfiltration",
+      "surface": "description",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "credential-removal-guide",
+      "family": "credential-exfiltration",
+      "surface": "resource",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "dotenv-parser-doc",
+      "family": "credential-exfiltration",
+      "surface": "description",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "public-ticket",
+      "family": "credential-exfiltration",
+      "surface": "tool",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "quiet-override",
+      "family": "deception",
+      "surface": "description",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-TP-004"
+      ],
+      "errors": []
+    },
+    {
+      "id": "false-pass",
+      "family": "deception",
+      "surface": "tool",
+      "label": "attack",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "approve-hidden",
+      "family": "deception",
+      "surface": "resource",
+      "label": "attack",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "poison-answer",
+      "family": "deception",
+      "surface": "instructions",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-TP-004"
+      ],
+      "errors": []
+    },
+    {
+      "id": "sensitive-log-policy",
+      "family": "deception",
+      "surface": "description",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "quiet-success",
+      "family": "deception",
+      "surface": "tool",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "deception-article",
+      "family": "deception",
+      "surface": "resource",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "spam-quote",
+      "family": "deception",
+      "surface": "instructions",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "image-secret",
+      "family": "render-exfiltration",
+      "surface": "tool",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-TP-007"
+      ],
+      "errors": []
+    },
+    {
+      "id": "html-secret",
+      "family": "render-exfiltration",
+      "surface": "resource",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-TP-007"
+      ],
+      "errors": []
+    },
+    {
+      "id": "link-secret",
+      "family": "render-exfiltration",
+      "surface": "description",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-TP-007"
+      ],
+      "errors": []
+    },
+    {
+      "id": "css-secret",
+      "family": "render-exfiltration",
+      "surface": "tool",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-TP-007"
+      ],
+      "errors": []
+    },
+    {
+      "id": "local-image",
+      "family": "render-exfiltration",
+      "surface": "tool",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "public-image",
+      "family": "render-exfiltration",
+      "surface": "resource",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "versioned-image",
+      "family": "render-exfiltration",
+      "surface": "resource",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "public-link",
+      "family": "render-exfiltration",
+      "surface": "description",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "py-shell-branch",
+      "family": "shell",
+      "surface": "python",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-SRC-101"
+      ],
+      "errors": []
+    },
+    {
+      "id": "js-shell-archive",
+      "family": "shell",
+      "surface": "typescript",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-SRC-101"
+      ],
+      "errors": []
+    },
+    {
+      "id": "py-shell-return",
+      "family": "shell",
+      "surface": "python",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-SRC-101"
+      ],
+      "errors": []
+    },
+    {
+      "id": "js-shell-callback",
+      "family": "shell",
+      "surface": "typescript",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-SRC-101"
+      ],
+      "errors": []
+    },
+    {
+      "id": "py-shell-argv",
+      "family": "shell",
+      "surface": "python",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "js-shell-fixed",
+      "family": "shell",
+      "surface": "typescript",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "py-shell-allowlist",
+      "family": "shell",
+      "surface": "python",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "js-shell-number",
+      "family": "shell",
+      "surface": "typescript",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "py-sql-search",
+      "family": "sql",
+      "surface": "python",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-SRC-102"
+      ],
+      "errors": []
+    },
+    {
+      "id": "js-sql-object",
+      "family": "sql",
+      "surface": "typescript",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-SRC-102"
+      ],
+      "errors": []
+    },
+    {
+      "id": "py-sql-return",
+      "family": "sql",
+      "surface": "python",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-SRC-102"
+      ],
+      "errors": []
+    },
+    {
+      "id": "js-sql-callback",
+      "family": "sql",
+      "surface": "typescript",
+      "label": "attack",
+      "detected": true,
+      "any_alert": true,
+      "alerts": [
+        "MCP-SRC-102"
+      ],
+      "errors": []
+    },
+    {
+      "id": "py-sql-bound",
+      "family": "sql",
+      "surface": "python",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "js-sql-bound",
+      "family": "sql",
+      "surface": "typescript",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "py-sql-numeric",
+      "family": "sql",
+      "surface": "python",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "js-sql-allowlist",
+      "family": "sql",
+      "surface": "typescript",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "py-path-download",
+      "family": "path",
+      "surface": "python",
+      "label": "attack",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "js-path-object",
+      "family": "path",
+      "surface": "typescript",
+      "label": "attack",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "py-path-wrong-escape",
+      "family": "path",
+      "surface": "python",
+      "label": "attack",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "js-path-return",
+      "family": "path",
+      "surface": "typescript",
+      "label": "attack",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "py-path-basename",
+      "family": "path",
+      "surface": "python",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "js-path-basename",
+      "family": "path",
+      "surface": "typescript",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "py-path-allowlist",
+      "family": "path",
+      "surface": "python",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "js-path-fixed",
+      "family": "path",
+      "surface": "typescript",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "py-ssrf-host",
+      "family": "ssrf",
+      "surface": "python",
+      "label": "attack",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "js-ssrf-object",
+      "family": "ssrf",
+      "surface": "typescript",
+      "label": "attack",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "py-ssrf-quote",
+      "family": "ssrf",
+      "surface": "python",
+      "label": "attack",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "js-ssrf-callback",
+      "family": "ssrf",
+      "surface": "typescript",
+      "label": "attack",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "py-ssrf-fixed-host",
+      "family": "ssrf",
+      "surface": "python",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "js-ssrf-fixed-host",
+      "family": "ssrf",
+      "surface": "typescript",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "py-ssrf-allowlist",
+      "family": "ssrf",
+      "surface": "python",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    },
+    {
+      "id": "js-ssrf-query",
+      "family": "ssrf",
+      "surface": "typescript",
+      "label": "benign",
+      "detected": false,
+      "any_alert": false,
+      "alerts": [],
+      "errors": []
+    }
+  ]
+}

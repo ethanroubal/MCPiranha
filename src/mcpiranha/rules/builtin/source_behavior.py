@@ -231,7 +231,8 @@ class CommandInjection(_SourceRule):
     what = "A tool argument reaches a shell command string"
     remediation = (
         "Pass arguments as a list without a shell (subprocess.run([...]), execFile), or quote "
-        "them (shlex.quote). Anyone who can steer the model can otherwise run commands."
+        "each complete shell word (shlex.quote), without wrapping it in additional quotes. "
+        "Shell quoting does not protect SQL, file paths or URL hosts."
     )
     references = ("https://cwe.mitre.org/data/definitions/78.html",)
 
@@ -251,12 +252,15 @@ class SqlInjection(_SourceRule):
 class PathTraversal(_SourceRule):
     id = "MCP-SRC-103"
     title = "Tool argument escapes its base directory"
-    default_severity = Severity.MEDIUM
+    # A handler argument crossing a filesystem/network boundary is high-impact even
+    # when static-analysis confidence remains medium. Whole-input capabilities are excluded.
+    default_severity = Severity.HIGH
     kinds = ("path_traversal",)
-    what = "A tool argument is joined to a base directory without a containment check"
+    what = "A tool argument reaches a based path without a recognized effective containment guard"
     remediation = (
-        "Resolve the joined path and check it stays under the base (Path.is_relative_to, "
-        "path.relative not starting with '..'); `../` otherwise reaches any file."
+        "Resolve the candidate and base, then reject paths outside that base before use. "
+        "Use Path.is_relative_to or a normalized JavaScript base plus path.sep; raw string "
+        "prefixes are insufficient. Account for symlinks and filesystem races."
     )
     references = ("https://cwe.mitre.org/data/definitions/22.html",)
 
@@ -265,7 +269,9 @@ class PathTraversal(_SourceRule):
 class ServerSideRequestForgery(_SourceRule):
     id = "MCP-SRC-104"
     title = "Tool argument chooses the host of a server request"
-    default_severity = Severity.MEDIUM
+    # A handler argument crossing a filesystem/network boundary is high-impact even
+    # when static-analysis confidence remains medium. Whole-input capabilities are excluded.
+    default_severity = Severity.HIGH
     kinds = ("ssrf",)
     what = "A tool argument sets the host of a URL the server requests"
     remediation = (

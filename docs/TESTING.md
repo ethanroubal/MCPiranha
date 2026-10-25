@@ -46,3 +46,85 @@ limitation in `zoo/threats.yaml`; do not weaken the expected result to make the 
 Remaining evaluation priorities include independent paraphrases, source flows through
 callbacks/objects beyond current taint limits, and payloads gated on time, identity or call
 counts. Bounded scans cannot guarantee activation of arbitrary conditional behavior.
+
+## Path-containment regression checks
+
+`uv run pytest -q tests/test_path_guards.py tests/test_taint.py` checks ineffective guards
+(labels/comments, ignored results, late checks, unrelated paths/roots, reassignment and weak
+prefixes, `relative_to(walk_up=True)` and partial-string offset checks) against recognized guards that reject unsafe values before the sink. It also checks
+that a helper's unchecked second argument remains reportable, aliases retain their value, and
+inference-budget exhaustion cannot invent a safety proof. Portable filename guards must reject
+both slash forms and dot traversal; forward-slash-only rejection is accepted only for explicit
+Python `posixpath.join` operations.
+
+The earlier JavaScript benign example using `p.startsWith(ROOT)` was insecure against sibling
+prefixes. Its benign replacement uses a normalized base plus `path.sep`; the old form remains
+in the adversarial cases. These are developer-authored regressions, not an independent blinded
+benchmark or a general safety guarantee. Custom validators, object/callback flows and filesystem
+races remain limitations.
+
+### Static package smoke pilot
+
+The published 0.3.0 wheel and the guard-fix candidate were compared on these pinned packages
+using static scans with `--no-deps --no-lock`; no server was started or tool invoked:
+
+| Package | Version | Source files | Path findings, baseline / candidate |
+|---|---|---:|---:|
+| `npm:@modelcontextprotocol/server-filesystem` | `2.0.0` | 7 | 0 / 0 |
+| `npm:@modelcontextprotocol/server-everything` | `2.0.0` | 48 | 0 / 0 |
+| `pypi:mcp-server-time` | `2026.10.19` | 3 | 0 / 0 |
+
+Source collection completed without errors for both versions. Other rule findings were not
+suppressed. This small compatibility check is not an independent user pilot, a labeled
+malware benchmark, or an estimate of detection accuracy; deeper evaluation still needs
+independently reviewed malicious and benign examples.
+
+## Detection-quality evaluation
+
+The repository now has a separate [labeled challenge experiment](../evaluation/README.md)
+with 64 cases across eight threat families, frozen first-run reports at medium/high thresholds,
+and per-case regression checks. It measures false alarms as well as missed attacks, and records
+analysis failures separately. Run `uv run pytest -q tests/test_detection_quality.py` or
+`uv run python -m evaluation.quality --output /tmp/quality.json` from the repository root.
+
+The first candidate measurement caught 13/32 attacks and flagged 7/32 benign cases at medium
+severity. These are developer-authored challenge results, not deployment accuracy estimates.
+They expose source-flow and semantic-instruction gaps that passing zoo regressions conceal.
+The labels and detectors were not adjusted to improve these scores. See the experiment README
+for scoring policy, assumptions, case-level reports and a path toward independent evaluation.
+
+`MCPIRANHA_QUALITY_REGISTRIES=1 uv run pytest -q tests/test_detection_quality_registry.py`
+checks two existing published-CVE release pairs against their fixes. It downloads hash-verified
+archives without installing or executing them and rejects incomplete source collection.
+Both vulnerable releases were flagged and both fixed releases were clean in the initial run.
+
+### Detection fixes and generalization checks
+
+`tests/test_quality_improvements.py` adds 99 developer-authored checks outside the original
+corpus: field and alias flows, helper return values, Python/JavaScript callbacks, clean neighboring
+fields, fixed returns, inactive nested functions, fake and context-inappropriate sanitizers,
+quoting inside shell quotes, ineffective allowlists, later assignments, computed writes/spreads,
+negated instructions, defensive-quote bypasses, and CSS/cache-query rendering behavior.
+
+The unchanged 64-case corpus now catches 32/32 attacks with 0/32 benign medium alerts, versus
+13/32 and 7/32 initially. At high severity it catches 16/32, versus 7/32 initially, with no benign
+high alerts. Candidate reports are separate from the original baseline, and per-case regression
+checks protect the improvements. These are development-set results after tuning, not independent
+accuracy estimates. The two CVE pairs still pass; the same three pinned package scans retain
+identical rule/severity finding counts, with completed source coverage for all 58 files.
+
+### High-severity classification
+
+`uv run pytest -q tests/test_high_severity.py` runs 99 additional severity/control checks,
+including four inert static CLI cases that verify `--fail-on high` exits 1 for unsafe flows
+and 0 for their safe counterparts. Text checks cover four surfaces and fullwidth normalization,
+local impact corroboration, unrelated/retry outcomes, explicit credential exports, pronouns,
+negation, quotes, public identifiers, different content sources and distance bounds.
+
+The frozen corpus now catches 32/32 attacks at **both** medium and high thresholds, with no
+benign medium/high alerts. The 16 additional high alerts were already detected at medium;
+this stage corrects risk classification rather than claiming 16 new detections. Reports are
+stored as `evaluation/high-threshold-{medium,high}.json`; the original baseline and preceding
+candidate reports remain intact, and regression tests compare against all three stages.
+Source severity expresses high potential impact while confidence remains medium. See the
+[evaluation report](../evaluation/README.md) for the escalation policy and its limitations.

@@ -85,6 +85,10 @@ Judged on what `mcpiranha.source` finds in a local script or the package's relea
 
 SRC-1xx are taint rules: input spliced into a command, query or URL host, or joined to a base
 directory, counts; input used whole (a shell tool's `command`) is a capability, not a finding.
+SRC-103 and SRC-104 classify these unguarded boundary flows as **high severity**, with
+**medium confidence** in the bounded static analysis. Severity expresses potential impact;
+it does not assert observed exploitation or raise the analyzer's certainty. Recognized guards,
+literal allowlists, safe argument positions and whole-input capabilities remain excluded.
 
 ## MCP-DY — Server behavior during a session
 Observed while listing (`--connect`): mcpiranha advertises sampling, elicitation and roots like a
