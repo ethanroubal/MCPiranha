@@ -368,9 +368,7 @@ def test_probe_windows_use_transport_clock_and_fail_closed(monkeypatch: pytest.M
     from mcpiranha.acquire.listing import enumerate_server
 
     async def run(clock_fails: bool) -> Any:
-        import tempfile
-
-        with tempfile.TemporaryFile(mode="w+") as errlog:
+        with sb.stderr_log() as errlog:
             prepared = await sb.prepare(
                 Launch(
                     transport="stdio",

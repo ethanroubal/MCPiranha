@@ -12,10 +12,13 @@ jobs:
   test:
     name: Python ${{ matrix.python }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +33,18 @@ jobs:
       - name: Types
         run: uv run pyright
       - name: Tests
-        run: uv run pytest -q
+        run: uv run pytest -q --junitxml=test-results.xml
+      - name: Test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-${{ matrix.os }}-py${{ matrix.python }}
+          path: test-results.xml
+      - name: Installed wheel smoke test
+        if: runner.os == 'Windows'
+        run: |
+          uv build
+          uv run python scripts/smoke_wheel.py
 
   docker-sandbox:
     name: Real Docker sandbox

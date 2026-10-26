@@ -97,6 +97,7 @@ def test_strict_fails_when_a_server_could_not_be_checked(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     broken = {"command": "python3", "args": ["-c", "import sys; sys.exit(1)"]}
     config = {"mcpServers": {"broken": broken}}
     (tmp_path / ".mcp.json").write_text(json.dumps(config), encoding="utf-8")

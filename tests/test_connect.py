@@ -44,6 +44,7 @@ def _snapshot(script: str, env: dict[str, str] | None = None) -> ServerSnapshot:
 
 def _project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, servers: dict[str, Any]) -> Path:
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
     monkeypatch.chdir(tmp_path)
     (tmp_path / "home").mkdir()
     config = tmp_path / ".mcp.json"

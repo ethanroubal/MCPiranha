@@ -1,5 +1,17 @@
 # Adversarial regression tests
 
+CI runs lint, type checks and the full default suite on Windows, macOS and Linux with
+Python 3.12 and 3.13. Windows also builds a wheel and runs `scripts/smoke_wheel.py` against an
+isolated installation: help/version, Unicode and space-containing source paths, required source
+coverage, JSON/SARIF output, and contrasting unsafe/safe scans with their expected exit codes.
+JUnit reports are retained as CI artifacts. Optional Docker, registry and model checks remain
+separate from the default suite; the real Docker tests run on Linux CI.
+
+`tests/test_windows.py` covers command wrappers, interpreter paths, stderr capture and
+native directory-junction exclusion. Static scans run directly in PowerShell; sandboxed
+connections and behavioral tracing require Docker Desktop configured for Linux containers.
+The frozen corpus uses LF checkout attributes so Windows line endings cannot change its hashes.
+
 The test suite checks specific detection guarantees and benign controls. A passing suite
 does not prove detection of every malicious server, paraphrase, program behavior or trigger.
 

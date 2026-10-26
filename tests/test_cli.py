@@ -74,6 +74,7 @@ def _project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     project.mkdir()
     shutil.copy(CONFIGS / "project.mcp.json", project / ".mcp.json")
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.chdir(project)
     return project
 

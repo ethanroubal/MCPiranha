@@ -9,8 +9,9 @@ from __future__ import annotations
 import json
 import sys
 from collections.abc import Sequence
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
+from urllib.parse import quote
 
 from mcpiranha import REPO_URL, RULES_URL, __version__
 from mcpiranha.core.models import Finding, ScanResult, Severity
@@ -38,10 +39,14 @@ _SECURITY_SEVERITY = {
 
 def artifact_uri(path: str, base: Path) -> str:
     p = Path(path).expanduser()
-    if not p.is_absolute():
-        return p.as_posix()
+    foreign = PureWindowsPath(path)
+    if sys.platform != "win32" and foreign.is_absolute():
+        prefix = "file:" if foreign.drive.startswith("\\\\") else "file:///"
+        return prefix + quote(foreign.as_posix(), safe="/:")
+    if not p.is_absolute() and not p.root and not p.drive:
+        return quote(p.as_posix(), safe="/")
     try:
-        return p.resolve().relative_to(base.resolve()).as_posix()
+        return quote(p.resolve().relative_to(base.resolve()).as_posix(), safe="/")
     except ValueError:
         return p.resolve().as_uri()
 

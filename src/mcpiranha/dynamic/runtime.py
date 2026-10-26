@@ -56,7 +56,7 @@ async def instrument(
         f"mcpiranha-{part}-{tag}" for part in ("net", "proxy", "trace", "tools")
     )
     sources = {
-        name: Path(__file__).with_name(name).read_text()
+        name: Path(__file__).with_name(name).read_text(encoding="utf-8")
         for name in ("proxy.py", "collector.py", "launcher.c")
     }
     helper = "mcpiranha-instrument:" + hash_json([sources, 2])[:16]
@@ -83,7 +83,7 @@ async def instrument(
     with tempfile.TemporaryDirectory(prefix="mcpiranha-build-") as directory:
         path = Path(directory)
         for name, source in sources.items():
-            (path / name).write_text(source)
+            (path / name).write_text(source, encoding="utf-8")
         (path / "Dockerfile").write_text(
             "FROM python:3.12-slim-bookworm\n"
             "RUN apt-get update && apt-get install -y --no-install-recommends strace gcc libc6-dev "
@@ -92,7 +92,8 @@ async def instrument(
             "RUN mkdir /opt/mcpiranha && gcc -static -O2 -Wall -Werror /launcher.c "
             "-o /opt/mcpiranha/launcher\n"
             "COPY collector.py /collector.py\nCOPY proxy.py /proxy.py\nUSER 1000:1000\n"
-            'ENTRYPOINT ["python", "-u", "/proxy.py"]\n'
+            'ENTRYPOINT ["python", "-u", "/proxy.py"]\n',
+            encoding="utf-8",
         )
         await sb.docker("build", "-q", "-t", helper, directory, timeout=sb.FETCH_TIMEOUT)
     for name in (tools, volume):
