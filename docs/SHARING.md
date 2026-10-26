@@ -35,6 +35,15 @@ examples through the issue form.
 [Install](https://pypi.org/project/mcpiranha/) ·
 [Feedback](https://github.com/ethanroubal/MCPiranha/issues/new/choose)
 
+## Directory listing draft
+
+[Awesome MCP DevTools](https://github.com/punkpeye/awesome-mcp-devtools#testing-tools) has a
+Testing Tools section that includes scanners. Review its contribution guidelines before proposing:
+
+- [ethanroubal/MCPiranha](https://github.com/ethanroubal/MCPiranha) 🐍 — MCP security scanner for
+  prompt injection, tool poisoning, unsafe configurations and risky source code. Offline static
+  checks, explicit live inspection, and JSON/SARIF reports on Windows, macOS and Linux.
+
 ## First user feedback
 
 Aim for five independently maintained MCP servers. Ask each willing maintainer to scan one
