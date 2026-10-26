@@ -1,0 +1,4 @@
+# Keep source and frozen evaluation bytes identical on Windows, macOS and Linux.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf

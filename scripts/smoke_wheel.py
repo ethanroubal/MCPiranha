@@ -67,7 +67,31 @@ def main() -> None:
             assert {finding["rule_id"] for finding in data["findings"]} == (
                 {"MCP-SRC-101"} if unsafe else set()
             )
-    print("Installed-wheel help, Unicode/space paths, unsafe/safe scans and exit codes passed.")
+            if unsafe:
+                sarif_report = Path(directory) / "report.sarif"
+                exported = subprocess.run(
+                    [
+                        *prefix,
+                        "scan",
+                        "path:" + str(project),
+                        "--offline",
+                        "--no-lock",
+                        "-f",
+                        "sarif",
+                        "-o",
+                        str(sarif_report),
+                    ],
+                    env=environment,
+                    check=False,
+                    capture_output=True,
+                )
+                assert exported.returncode == 1
+                log = json.loads(sarif_report.read_text(encoding="utf-8"))
+                uri = log["runs"][0]["results"][0]["locations"][0]["physicalLocation"][
+                    "artifactLocation"
+                ]["uri"]
+                assert " " not in uri and "%20" in uri and "%E6%B8%AC%E8%A9%A6" in uri
+    print("Installed-wheel help, Unicode/space paths, JSON/SARIF and safe/unsafe exits passed.")
 
 
 if __name__ == "__main__":

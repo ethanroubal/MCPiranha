@@ -61,3 +61,45 @@ def test_stderr_stream_captures_child_output_and_cleans_up() -> None:
         stream.seek(0)
         assert stream.read() == "trace 測試"
     assert stream.closed and not path.exists() and not path.parent.exists()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Requires native Windows directory junctions")
+def test_source_scan_does_not_follow_windows_junctions(tmp_path: Path) -> None:
+    import json
+
+    from typer.testing import CliRunner
+
+    from mcpiranha.cli import app
+
+    root, external = tmp_path / "project", tmp_path / "external"
+    root.mkdir()
+    external.mkdir()
+    (root / "good.py").write_text("value = 1\n", encoding="utf-8")
+    (external / "bad.py").write_text("def broken(:\n", encoding="utf-8")
+    junction = root / "linked"
+    subprocess.run(
+        ["cmd.exe", "/d", "/c", "mklink", "/J", str(junction), str(external)],
+        check=True,
+        capture_output=True,
+    )
+    try:
+        assert junction.is_junction()
+        result = CliRunner().invoke(
+            app,
+            [
+                "scan",
+                "path:" + str(root),
+                "--offline",
+                "--no-lock",
+                "--require-coverage",
+                "source",
+                "-f",
+                "json",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        coverage = json.loads(result.stdout)["servers"][0]["coverage"]["source"]
+        assert coverage["status"] == "completed" and coverage["count"] == 1
+    finally:
+        junction.rmdir()
+    assert (external / "bad.py").exists()

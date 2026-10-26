@@ -165,7 +165,11 @@ def _directory_files(project: Path) -> Iterator[tuple[str, bytes]]:
     total = 0
     for base, directories, names in os.walk(project, followlinks=False):
         directories[:] = sorted(
-            d for d in directories if d not in _SKIP_DIRS and not (Path(base) / d).is_symlink()
+            d
+            for d in directories
+            if d not in _SKIP_DIRS
+            and not (Path(base) / d).is_symlink()
+            and not (Path(base) / d).is_junction()
         )
         for name in sorted(names):
             path = Path(base) / name
