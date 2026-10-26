@@ -168,8 +168,8 @@ StrictOpt = Annotated[
     bool | None,
     typer.Option(
         "--strict/--no-strict",
-        help="Exit 2 if any server couldn't be connected to, so CI never passes on a partial "
-        "scan. Default: the policy's `strict`, else off.",
+        help="Exit 2 on scan warnings, including incomplete source analysis. "
+        "Default: the policy's `strict`, else off.",
         show_default=False,
     ),
 ]

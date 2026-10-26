@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.4.0 — 2026-10-26
+
+Upgrade notes: unguarded based-path and URL-host flows now affect the default high-severity
+failure gate. `--strict` fails on incomplete source analysis, including unresolved local imports
+and exhausted budgets. Basename-only path handling can now alert; use a checked resolved path
+or safe filename allowlist. The unchanged development corpus records 32/32 attack detections
+and 2/32 benign alerts; this is not independently measured deployment accuracy.
+
 - Stop treating Python/JavaScript basename extraction as path sanitization: dot components
   retain taint through aliases and helper returns. JavaScript basename calls also retain
   input in shell/SQL/URL analysis rather than dropping it through an untainted receiver.

@@ -11,7 +11,7 @@ JavaScript/TypeScript source, published packages, and live server metadata.
 **Static scans do not start servers or run package code.** Live inspection and tool invocation
 are explicit opt-ins. Reports show both findings and what the scanner could actually inspect.
 
-This README describes `main`; see the [changelog](https://github.com/ethanroubal/MCPiranha/blob/main/CHANGELOG.md) for changes not yet on PyPI.
+See the [changelog](https://github.com/ethanroubal/MCPiranha/blob/main/CHANGELOG.md) for release history, upgrade notes and unreleased changes.
 
 [Quick start](#quick-start) · [Common tasks](#common-tasks) · [Reading results](#reading-results) ·
 [Limits](#limits) · [Full usage guide](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md)

@@ -2,7 +2,7 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-REPO_URL = "https://github.com/ethanroubal/MCP-Server-Security-Scanner"
+REPO_URL = "https://github.com/ethanroubal/MCPiranha"
 RULES_URL = f"{REPO_URL}/blob/main/docs/RULES.md"
 
 try:
