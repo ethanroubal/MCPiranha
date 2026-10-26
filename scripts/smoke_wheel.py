@@ -59,9 +59,12 @@ def main() -> None:
                 "python",
                 "-I",
                 "-c",
-                "import mcpiranha, pathlib, sys; "
+                "import importlib.metadata, mcpiranha, pathlib, sys, sysconfig; "
                 f"assert sys.version_info[:2] == {sys.version_info[:2]!r}; "
-                "assert 'site-packages' in pathlib.Path(mcpiranha.__file__).parts",
+                "assert 'site-packages' in pathlib.Path(mcpiranha.__file__).parts; "
+                "assert mcpiranha.__version__ == importlib.metadata.version('mcpiranha'); "
+                "entry = 'mcpiranha.exe' if sys.platform == 'win32' else 'mcpiranha'; "
+                "assert (pathlib.Path(sysconfig.get_path('scripts')) / entry).is_file()",
             ],
             python=True,
         )
