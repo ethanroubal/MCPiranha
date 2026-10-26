@@ -58,7 +58,9 @@ def test_python_injection(body: str, kind: str) -> None:
         'requests.get(f"https://api.example.invalid/v1/{arg}")',  # input in the path only
         "requests.get(arg)",  # a fetch tool
         'subprocess.run(f"ls {int(arg)}", shell=True)',  # cast
-        "open(os.path.join(ROOT, os.path.basename(arg)))",  # basename
+        "name = os.path.basename(arg)\n"
+        'if name not in {"daily.txt", "weekly.txt"}: raise ValueError()\n'
+        "open(os.path.join(ROOT, name))",  # basename needs a real filename restriction
     ],
 )
 def test_python_not_injection(body: str) -> None:

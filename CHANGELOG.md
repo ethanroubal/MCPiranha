@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Stop treating Python/JavaScript basename extraction as path sanitization: dot components
+  retain taint through aliases and helper returns. JavaScript basename calls also retain
+  input in shell/SQL/URL analysis rather than dropping it through an untainted receiver.
+- Preserve filename allowlists through resolved/nested joined paths. Keep containment,
+  ordering and unchanged-binding checks; ignored, late and wrong-value guards remain unsafe.
+- Add 74 basename regressions, including inert filesystem escape checks and CLI high gates.
+  Preserve the frozen evaluation labels and record two additional conservative basename alerts
+  explicitly: 32/32 attacks detected, 2/32 benign alerts at medium and high.
+
 - Validate imported flows with 52 additional cross-domain rule/evidence and CLI checks, covering
   SQL injection, path traversal, SSRF, shell injection and safe counterparts. Clarify import
   resolution and partial-coverage behavior in the README.

@@ -270,3 +270,33 @@ Dynamic loading, custom resolvers, complex scope/rebinding, arbitrary classes an
 search-path differences remain outside this binding model. See [usage limits](../docs/USAGE.md#source-analysis).
 The next quality priority is independent project-separated validation, with labels reviewed
 without tuning detectors to those cases.
+
+
+## Basename-safety follow-up
+
+`basename-safety-medium.json` and `basename-safety-high.json` keep the identical corpus,
+labels and earlier reports. At both thresholds the current scanner records **32 TP, 2 FP,
+0 FN, 30 TN**, with no incomplete cases: all 32 attacks alert, while two of the 32
+benign-labeled cases now alert. Precision on this set is 94.1%, versus 100% in the preceding
+stage. This remains a development-set measurement, not deployment accuracy.
+
+The removed exemption treated basename extraction as sufficient path sanitization. Basename
+preserves `..`; joining a fixed filename afterward or using a directory operation can escape
+the intended base. Input now remains tainted through aliases and helper returns. JavaScript
+also preserves basename arguments in other domains instead of taking the untainted `path`
+receiver as its result. Real containment checks and safe literal filename allowlists remain
+recognized, including through resolved/nested joined paths.
+
+The existing `py-path-basename` and `js-path-basename` cases are read-only examples without
+that fixed suffix, and remain labeled benign. Removing the blanket exemption conservatively
+alerts on them; it does not prove those specific reads exploitable. Their labels and earlier
+zero-alert results were not rewritten. The comparator reports exactly four signal changes
+(two cases, each for detected/any-alert), and regression tests explicitly review only those
+changes. The current-stage baseline still admits no new regression. These alerts make the
+precision cost visible rather than hiding it behind a relabeled challenge set.
+
+`tests/test_basename_safety.py` adds 74 developer-authored regressions, including safe twins,
+guard bypasses, cross-domain flows, high-threshold CLI checks and real inert filesystem
+examples. The first 46 checks reproduced 26 failures before the fix. The three pinned package
+smoke scans retain the same finding counts and coverage statuses, and both vulnerable/fixed
+registry pairs still pass. Independent reviewed validation remains outstanding.

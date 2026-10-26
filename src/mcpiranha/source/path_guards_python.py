@@ -346,13 +346,21 @@ class PathGuards:
             parts = [node.left, node.right]
         elif isinstance(node, ast.Call):
             name = _name(node.func)
+            if (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr == "resolve"
+                and not node.args
+                and not node.keywords
+            ):
+                return self._safe_join(node.func.value, at, depth + 1)
             if name in ("os.path.join", "posixpath.join", "Path", "pathlib.Path"):
                 parts = list(node.args)
         return (
             len(parts) > 1
-            and not self.tainted(parts[0])
+            and (not self.tainted(parts[0]) or self._safe_join(parts[0], at, depth + 1))
             and all(
                 not self.tainted(p)
+                or self.allowlisted(p, at=at, domain="path")
                 or self.component_safe(
                     p, at, posix=isinstance(node, ast.Call) and _name(node.func) == "posixpath.join"
                 )

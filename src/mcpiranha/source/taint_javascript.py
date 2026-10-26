@@ -41,9 +41,10 @@ _NUMERIC = frozenset(
 _SANITIZERS: dict[Domain, frozenset[str]] = {
     "shell": _NUMERIC | {"shellQuote", "shellescape", "escapeShellArg"},
     "sql": _NUMERIC,
-    "path": _NUMERIC | {"path.basename", "path.posix.basename", "path.win32.basename"},
+    "path": _NUMERIC,
     "url": frozenset(),
 }
+_BASENAMES = frozenset({"path.basename", "path.posix.basename", "path.win32.basename"})
 _CALLBACKS = frozenset({"map", "forEach", "flatMap", "filter", "some", "every", "find"})
 _HANDLER_KEYS = ("execute", "handler", "callback", "cb", "run", "fn")
 _EXEC_ALIAS = re.compile(
@@ -244,6 +245,11 @@ class _Flow:
                 if returned:
                     found = [t for inner, value in returned if (t := inner.taint_of(value))]
                     return max(found, key=lambda t: _RANK[t[0]]) if found else None
+            if callee in _BASENAMES:
+                # Basename removes separators but preserves '.', '..' and controlled suffixes.
+                # Keep the input rather than using the untainted `path` receiver as the result.
+                found = [t for value in arg_nodes if (t := self.taint_of(value))]
+                return max(found, key=lambda t: _RANK[t[0]]) if found else None
             func = node.child_by_field_name("function")
             if func is not None and func.type == "member_expression":
                 # x.trim(), x.toLowerCase(), parts.join(" ")

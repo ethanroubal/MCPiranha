@@ -29,6 +29,9 @@ pipx install mcpiranha
 mcpiranha scan .mcp.json
 ```
 
+Use `mcpiranha --help` to list commands, or `mcpiranha scan --help` for scan options
+and short descriptions. Every command supports `--help`.
+
 Without a target, `mcpiranha scan` discovers supported client configurations on your machine
 and in the current project. [Supported clients and config paths](https://github.com/ethanroubal/MCPiranha/blob/main/docs/CLIENTS.md) include
 Claude Desktop/Code, Cursor, VS Code, Codex CLI and others on macOS, Linux and Windows.
@@ -86,6 +89,7 @@ Helper flows follow local import aliases, namespaces and common re-exports using
 queue. Unresolved local bindings or exhausted analysis/finding budgets mark source coverage
 **partial**, retaining findings and snapshot limitations. Completion does not establish that
 arbitrary dynamic calls, custom classes or validators were understood.
+`basename()` alone does not establish containment; use a checked path or filename allowlist.
 
 ### Use in CI
 

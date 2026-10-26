@@ -177,3 +177,20 @@ path and SSRF sinks/return values with safe twins, plus all four injection famil
 real CLI high-threshold gates. Assertions cover relevant rule, severity, confidence, exact
 source file/line, evidence, completed coverage and unsafe/safe exit codes. These are development
 regressions, not independent deployment accuracy measurements.
+
+
+### Basename is not containment
+
+`uv run pytest -q tests/test_basename_safety.py` runs 74 checks across native/POSIX/Windows
+basename functions, inline/alias/helper/imported-return flows, directory operations and
+shell/SQL/URL contexts. Real safeguards, literal inputs and constant helper returns stay quiet;
+ignored/late/wrong-value/reassigned checks and ineffective allowlists do not suppress findings.
+CLI checks enforce high-severity exits. Inert temporary-file tests independently demonstrate
+that a `..` basename plus a fixed suffix escapes its base.
+
+The earlier safe-basename regressions now require an actual filename allowlist. The frozen
+64-case corpus and historical reports are unchanged: `basename-safety-{medium,high}.json`
+records 32 attack detections and two benign-labeled basename alerts, with no incomplete cases.
+Regression tests accept exactly those reviewed alert changes and assert their metrics; the
+benchmark comparator still reports them as new false alarms. This is an explicit precision
+tradeoff, not a relabeling or a claim that every basename-only file read is exploitable.

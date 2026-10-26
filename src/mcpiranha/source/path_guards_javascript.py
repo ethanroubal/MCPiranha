@@ -371,5 +371,10 @@ class PathGuards:
             and callee_of(node) in ("path.join", "path.resolve")
             and len(args) > 1
             and not self.tainted(args[0])
-            and all(not self.tainted(p) or self.component_safe(p, at) for p in args[1:])
+            and all(
+                not self.tainted(p)
+                or self.allowlisted(p, at=at, domain="path")
+                or self.component_safe(p, at)
+                for p in args[1:]
+            )
         )

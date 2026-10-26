@@ -159,12 +159,25 @@ def test_malformed_source_is_inconclusive() -> None:
 
 @pytest.mark.parametrize("threshold", [Severity.MEDIUM, Severity.HIGH])
 @pytest.mark.parametrize(
-    "record", ["baseline", "candidate", "high-threshold", "helper-flow", "import-flow"]
+    "record",
+    ["baseline", "candidate", "high-threshold", "helper-flow", "import-flow", "basename-safety"],
 )
-def test_challenge_set_does_not_regress(threshold: Severity, record: str) -> None:
+def test_challenge_set_has_only_reviewed_changes(threshold: Severity, record: str) -> None:
     baseline = json.loads(CORPUS.with_name(f"{record}-{threshold.value}.json").read_text())
     current = run(threshold=threshold)
-    assert regressions(baseline, current) == []
+    # Keep the frozen labels and every earlier report. Removing basename's unsafe exemption
+    # deliberately adds conservative alerts on these two benign-labeled read-only examples.
+    # Assert the exact changes: this is not a blanket exception for the path family.
+    reviewed = (
+        []
+        if record == "basename-safety"
+        else [
+            f"{case}: new false alarm ({signal})"
+            for case in ("py-path-basename", "js-path-basename")
+            for signal in ("detected", "any_alert")
+        ]
+    )
+    assert regressions(baseline, current) == reviewed
     assert current["metrics"]["inconclusive"] == 0
 
 
@@ -234,3 +247,20 @@ def test_cli_cannot_overwrite_its_comparison_baseline(
         main()
     assert exc.value.code == 2
     assert baseline.read_text() == "preserve this baseline"
+
+
+@pytest.mark.parametrize("threshold", [Severity.MEDIUM, Severity.HIGH])
+def test_basename_tradeoff_is_visible_in_unchanged_corpus_metrics(threshold: Severity) -> None:
+    current = run(threshold=threshold)
+    assert {k: current["metrics"][k] for k in ("tp", "fp", "fn", "tn", "inconclusive")} == {
+        "tp": 32,
+        "fp": 2,
+        "fn": 0,
+        "tn": 30,
+        "inconclusive": 0,
+    }
+    flagged = [
+        case for case in current["outcomes"] if case["label"] == "benign" and case["any_alert"]
+    ]
+    assert {case["id"] for case in flagged} == {"py-path-basename", "js-path-basename"}
+    assert all(case["alerts"] == ["MCP-SRC-103"] for case in flagged)

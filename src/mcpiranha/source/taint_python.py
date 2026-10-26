@@ -43,7 +43,7 @@ _NUMERIC = frozenset({"int", "float", "bool", "len"})
 _SANITIZERS: dict[Domain, frozenset[str]] = {
     "shell": _NUMERIC | {"shlex.quote"},
     "sql": _NUMERIC,
-    "path": _NUMERIC | {"os.path.basename", "posixpath.basename", "ntpath.basename"},
+    "path": _NUMERIC,
     "url": frozenset(),
 }
 _SHELL_CALLS = frozenset({"run", "call", "check_call", "check_output", "Popen"})

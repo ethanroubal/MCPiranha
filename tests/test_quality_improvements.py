@@ -258,8 +258,22 @@ def test_sanitizers_do_not_prove_safety_in_other_contexts(
         (js("exec(`rg ${shellQuote(needle)}`);"), "ts"),
         (py('db.execute("SELECT * FROM logs WHERE id = " + str(int(needle)))'), "py"),
         (js("db.query(`SELECT * FROM logs WHERE id = ${Number(needle)}`);"), "ts"),
-        (py('open(os.path.join("/data", os.path.basename(needle))).read()'), "py"),
-        (js('fs.readFileSync(path.join("/data", path.basename(needle)));'), "ts"),
+        (
+            py(
+                "name = os.path.basename(needle)\n"
+                'if name not in {"daily.txt", "weekly.txt"}: raise ValueError()\n'
+                'open(os.path.join("/data", name)).read()'
+            ),
+            "py",
+        ),
+        (
+            js(
+                "const name = path.basename(needle); "
+                'if (!["daily.txt", "weekly.txt"].includes(name)) throw Error(); '
+                'fs.readFileSync(path.join("/data", name));'
+            ),
+            "ts",
+        ),
         (
             py(
                 'os.system("rg " + clean(needle))',

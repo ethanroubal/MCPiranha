@@ -429,7 +429,7 @@
   surface: source
   status: partial
   rules: [MCP-SRC-101, MCP-SRC-102, MCP-SRC-103, MCP-SRC-104, MCP-DY-006]
-  tests: [zoo:vulnerable-tools-py, zoo:vulnerable-tools-js, zoo:safe-tools, test:tests/test_dynamic_reliability.py::test_nested_fuzz_and_correlated_canaries, test:tests/test_quality_improvements.py::test_varied_objects_aliases_assignments_and_return_summaries, test:tests/test_deep_helpers.py::test_deep_sink_calls_and_safe_twins, test:tests/test_deep_helpers.py::test_return_depth_exhaustion_is_visible, test:tests/test_import_resolution.py::test_import_variants_preserve_sink_and_return_detection, test:tests/test_import_resolution.py::test_duplicate_names_and_file_order_cannot_change_import_target]
+  tests: [zoo:vulnerable-tools-py, zoo:vulnerable-tools-js, zoo:safe-tools, test:tests/test_dynamic_reliability.py::test_nested_fuzz_and_correlated_canaries, test:tests/test_quality_improvements.py::test_varied_objects_aliases_assignments_and_return_summaries, test:tests/test_deep_helpers.py::test_deep_sink_calls_and_safe_twins, test:tests/test_deep_helpers.py::test_return_depth_exhaustion_is_visible, test:tests/test_import_resolution.py::test_import_variants_preserve_sink_and_return_detection, test:tests/test_import_resolution.py::test_duplicate_names_and_file_order_cannot_change_import_target, test:tests/test_basename_safety.py::test_basename_does_not_drop_taint, test:tests/test_basename_safety.py::test_dot_component_really_escapes_the_base]
   gap: >-
     Taint is followed across the package's files through a cached, context-sensitive work queue
     for handlers registered the MCP SDKs' ways. Local module/symbol bindings resolve common
@@ -438,6 +438,7 @@
     and helper returns are followed. Arbitrary heap objects, dynamic dispatch, chains beyond the analysis budgets
     and instances other than self/this remain unsupported. Path guard recognition is value-specific and ordered, with conservative support
     for known containment predicates and separator rejection, not arbitrary custom validators.
+    Basename extraction retains input taint because dot components can escape a joined base.
     Guard inference stops at 2,000 syntax nodes per function; unsupported patterns remain
     candidates for review. Filesystem races, custom types and arbitrary side effects are not proven safe.
 

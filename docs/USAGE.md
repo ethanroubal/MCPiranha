@@ -86,7 +86,10 @@ severity risks (SRC-103/SRC-104), with medium static-analysis confidence. They n
 normal `--fail-on high` gate; recognized safe cases and whole-input capabilities remain excluded.
 
 Sanitizers are evaluated for the sink: shell quoting does not make a path, SQL fragment or
-hostname safe. Quoting inside existing shell quotes is not accepted as protection. Small
+hostname safe. `basename()` is a transformation, not a containment guarantee: it can return
+`.` or `..`, and a joined suffix can then reach outside the intended base. Its input remains
+tainted in Python and JavaScript/TypeScript, including helper-return flows. Use a recognized
+check on the resolved candidate or a small safe literal filename allowlist before use. Quoting inside existing shell quotes is not accepted as protection. Small
 literal allowlists can suppress findings only when they reject unsafe values before use and
 the checked binding remains unchanged. Helper calls use a cached, context-sensitive work queue
 instead of a fixed two-call cutoff. Per-language/package limits are 4,096 helper contexts,

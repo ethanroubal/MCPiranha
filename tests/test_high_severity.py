@@ -178,7 +178,9 @@ def test_source_boundary_risk_is_high_without_inflating_confidence(body: str, ru
     [
         ('open(os.path.join("/srv/data", filename)).read()', "MCP-SRC-103", True),
         (
-            'open(os.path.join("/srv/data", os.path.basename(filename))).read()',
+            "name = os.path.basename(filename)\n    "
+            'if name not in {"daily.txt", "weekly.txt"}: raise ValueError()\n    '
+            'open(os.path.join("/srv/data", name)).read()',
             "MCP-SRC-103",
             False,
         ),
