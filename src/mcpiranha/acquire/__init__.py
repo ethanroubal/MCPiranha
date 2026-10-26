@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -18,7 +17,7 @@ from mcpiranha.acquire.listing import (
     observe_classic,
 )
 from mcpiranha.acquire.oauth import OAuthError, OpenUrl
-from mcpiranha.acquire.sandbox import Prepared, Sandbox, SandboxError, prepare
+from mcpiranha.acquire.sandbox import Prepared, Sandbox, SandboxError, prepare, stderr_log
 from mcpiranha.core.coverage import record
 from mcpiranha.core.models import CoverageCheck, DynamicObservation, ServerSnapshot
 from mcpiranha.core.secrets import mask_secrets
@@ -126,7 +125,7 @@ async def connect_one(
         raise SandboxError("--dynamic requires a Docker-sandboxed stdio server")
     if snapshot.launch is None:
         raise SandboxError("no launch configuration")
-    with tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as errlog:
+    with stderr_log() as errlog:
         prepared = await prepare(
             snapshot.launch,
             sandbox=options.sandbox,

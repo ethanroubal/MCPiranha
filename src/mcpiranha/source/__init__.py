@@ -28,7 +28,7 @@ import httpx2
 
 from mcpiranha import __version__
 from mcpiranha.core.coverage import record, summarize
-from mcpiranha.core.launch import command_line
+from mcpiranha.core.launch import command_line, executable_name
 from mcpiranha.core.models import (
     CoverageCheck,
     PackageMeta,
@@ -132,7 +132,7 @@ def local_entry(snapshot: ServerSnapshot) -> Path | None:
     if launch is None or launch.transport != "stdio" or not launch.command:
         return None
     argv = command_line(launch)
-    if Path(argv[0]).name.split(".")[0] not in _RUNNERS:
+    if executable_name(argv[0]).split(".")[0] not in _RUNNERS:
         return None
     # Relative paths: clients start servers in the project (the config's folder) or the cwd.
     bases = [Path(snapshot.origin.config_path).parent] if snapshot.origin.config_path else []

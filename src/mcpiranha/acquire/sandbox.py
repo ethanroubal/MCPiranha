@@ -22,9 +22,11 @@ import json
 import os
 import posixpath
 import re
+import tempfile
 import uuid
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Generator, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal, TextIO, cast
 
 import anyio
@@ -105,6 +107,16 @@ _PLACEHOLDER = re.compile(
     r"\$\{(?:env:)?([A-Za-z_]\w*)\}|\{env:([A-Za-z_]\w*)\}|\$([A-Za-z_]\w*)|\$\{[^}]*\}"
 )
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+@contextlib.contextmanager
+def stderr_log() -> Generator[TextIO, None, None]:
+    """An actual text stream on every OS, closed before its temporary directory is removed."""
+    with (
+        tempfile.TemporaryDirectory(prefix="mcpiranha-stderr-") as directory,
+        (Path(directory) / "stderr.log").open("w+", encoding="utf-8", errors="replace") as stream,
+    ):
+        yield stream
 
 
 class SandboxError(Exception):

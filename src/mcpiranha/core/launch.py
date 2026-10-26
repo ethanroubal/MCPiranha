@@ -39,7 +39,8 @@ _DOCKER_VALUE_FLAGS = frozenset({
 })  # fmt: skip
 
 
-def _base(command: str) -> str:
+def executable_name(command: str) -> str:
+    """Runner name independent of host path syntax and Windows executable suffixes."""
     name = PureWindowsPath(command).name if "\\" in command else PurePath(command).name
     return re.sub(r"\.(cmd|exe|bat|ps1)$", "", name, flags=re.IGNORECASE).lower()
 
@@ -47,8 +48,14 @@ def _base(command: str) -> str:
 def command_line(launch: Launch) -> list[str]:
     """The effective command line, with Windows `cmd /c` wrappers removed."""
     argv = [launch.command or "", *launch.args]
-    while len(argv) > 2 and _base(argv[0]) == "cmd" and argv[1].lower() in ("/c", "/k"):
-        argv = argv[2:]
+    flags = {"/d", "/s", "/q", "/a", "/u", "/e:on", "/e:off", "/f:on", "/f:off", "/v:on", "/v:off"}
+    while len(argv) > 2 and executable_name(argv[0]) == "cmd":
+        index = 1
+        while index < len(argv) and argv[index].lower() in flags:
+            index += 1
+        if index + 1 >= len(argv) or argv[index].lower() not in ("/c", "/k"):
+            break
+        argv = argv[index + 1 :]
     return argv
 
 
@@ -101,7 +108,7 @@ def package_ref(launch: Launch | None) -> PackageRef | None:
     if launch is None or launch.transport != "stdio" or not launch.command:
         return None
     argv = command_line(launch)
-    runner, rest = _base(argv[0]), argv[1:]
+    runner, rest = executable_name(argv[0]), argv[1:]
 
     if runner == "npx":
         return _npm(rest, runner, 1)
@@ -124,7 +131,7 @@ def docker_run(launch: Launch | None) -> DockerRun | None:
     if launch is None or not launch.command:
         return None
     argv = command_line(launch)
-    if _base(argv[0]) not in ("docker", "podman") or argv[1:2] != ["run"]:
+    if executable_name(argv[0]) not in ("docker", "podman") or argv[1:2] != ["run"]:
         return None
     options: list[tuple[str, str | None]] = []
     i = 2

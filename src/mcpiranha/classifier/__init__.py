@@ -114,7 +114,9 @@ class InjectionClassifier:
                 "the classifier needs the ml extra: pip install 'mcpiranha[ml]'"
             ) from exc
         self._np: Any = np
-        config: dict[str, Any] = json.loads((directory / "onnx" / "config.json").read_text())
+        config: dict[str, Any] = json.loads(
+            (directory / "onnx" / "config.json").read_text(encoding="utf-8")
+        )
         labels = {int(k): v for k, v in config["id2label"].items()}
         self._injection = next(i for i, label in labels.items() if label == "INJECTION")
         self._tokenizer: Any = tokenizers.Tokenizer.from_file(
