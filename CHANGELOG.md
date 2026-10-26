@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.1 — 2026-10-26
+
+Windows compatibility fixes and packaging improvements. Static scans run natively on Windows;
+sandboxed connections and behavioral tracing require Docker Desktop using Linux containers.
+
 - Improve project discovery and onboarding with a focused MCP security scanner introduction,
   a reproducible offline demo, package search metadata, the declared Apache-2.0 license text,
   and a form for scan/installation feedback.
