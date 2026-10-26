@@ -1,11 +1,18 @@
 # Adversarial regression tests
 
 CI runs lint, type checks and the full default suite on Windows, macOS and Linux with
-Python 3.12 and 3.13. Windows also builds a wheel and runs `scripts/smoke_wheel.py` against an
-isolated installation: help/version, Unicode and space-containing source paths, required source
-coverage, JSON/SARIF output, and contrasting unsafe/safe scans with their expected exit codes.
-JUnit reports are retained as CI artifacts. Optional Docker, registry and model checks remain
-separate from the default suite; the real Docker tests run on Linux CI.
+Python 3.12 and 3.13. A single build supplies the wheel tested on all six combinations by
+`scripts/smoke_wheel.py`. It runs outside the checkout using an isolated installation and the
+selected Python interpreter: help/version, Unicode and space-containing paths, source coverage,
+JSON/SARIF output, unsafe/safe detection, config discovery and server/client selection. Windows
+also verifies `%APPDATA%` overrides the home-directory fallback. Config fixtures include UTF-8
+BOMs and JSON comments. Missing selectors must return exit code 2.
+
+Separate Linux jobs check the two pinned vulnerable/fixed release pairs and the real Docker
+sandbox/local registry zoo. JUnit reports and release artifacts are retained in CI. Optional
+model checks remain manual. Run the **CI** workflow manually from GitHub Actions to repeat all
+checks without publishing. Release tags call the same workflow; PyPI publication waits for every
+check and uploads the exact artifacts used by the wheel checks, without rebuilding them.
 
 `tests/test_windows.py` covers command wrappers, interpreter paths, stderr capture and
 native directory-junction exclusion. Static scans run directly in PowerShell; sandboxed
@@ -105,8 +112,9 @@ They expose source-flow and semantic-instruction gaps that passing zoo regressio
 The labels and detectors were not adjusted to improve these scores. See the experiment README
 for scoring policy, assumptions, case-level reports and a path toward independent evaluation.
 
-`MCPIRANHA_QUALITY_REGISTRIES=1 uv run pytest -q tests/test_detection_quality_registry.py`
-checks two existing published-CVE release pairs against their fixes. It downloads hash-verified
+CI enables `MCPIRANHA_QUALITY_REGISTRIES=1` in a dedicated job. To run it locally:
+`MCPIRANHA_QUALITY_REGISTRIES=1 uv run pytest -q tests/test_detection_quality_registry.py`.
+This checks two existing published-CVE release pairs against their fixes. It downloads hash-verified
 archives without installing or executing them and rejects incomplete source collection.
 Both vulnerable releases were flagged and both fixed releases were clean in the initial run.
 

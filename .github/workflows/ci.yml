@@ -4,14 +4,32 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  build:
+    name: Build release artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
   test:
     name: Python ${{ matrix.python }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    needs: build
     defaults:
       run:
         shell: bash
@@ -22,6 +40,10 @@ jobs:
         python: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python }}
@@ -41,10 +63,28 @@ jobs:
           name: tests-${{ matrix.os }}-py${{ matrix.python }}
           path: test-results.xml
       - name: Installed wheel smoke test
-        if: runner.os == 'Windows'
-        run: |
-          uv build
-          uv run python scripts/smoke_wheel.py
+        run: uv run --python "${{ matrix.python }}" python scripts/smoke_wheel.py
+
+  release-pairs:
+    name: Pinned vulnerable and fixed releases
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Check vulnerable detection and clean fixes
+        env:
+          MCPIRANHA_QUALITY_REGISTRIES: "1"
+        run: uv run pytest -q tests/test_detection_quality_registry.py --junitxml=release-pairs.xml
+      - name: Test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinned-release-pairs
+          path: release-pairs.xml
 
   docker-sandbox:
     name: Real Docker sandbox

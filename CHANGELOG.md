@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Gate PyPI publishing on the shared compatibility workflow: the same built wheel is checked
+  on all six OS/Python combinations, with pinned vulnerable/fixed releases checked in CI.
+  Extend installed CLI checks to config discovery, Windows APPDATA overrides and selection.
 - Add native Windows CI on Python 3.12 and 3.13, including installed-wheel CLI checks for
   Unicode/space paths, JSON/SARIF output, coverage requirements and detection exit codes.
 - Fix Windows stderr capture, full interpreter paths and `cmd.exe` launch wrappers;

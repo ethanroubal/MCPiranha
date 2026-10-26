@@ -149,6 +149,9 @@ vulnerable/fixed release pairs. Broader independent validation remains necessary
 
 ## Development and documentation
 
+CI checks Windows, macOS and Linux, isolated wheel installations, and pinned vulnerable/fixed
+release pairs. Release tags must pass these checks before the tested artifacts reach PyPI.
+
 ```bash
 uv sync --all-extras
 uv run pytest -q
