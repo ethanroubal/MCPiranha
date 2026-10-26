@@ -1,10 +1,31 @@
 [project]
 name = "MCPiranha"
 version = "0.4.0"
-description = "Security scanner for Model Context Protocol (MCP) servers"
+description = "MCP security scanner for Model Context Protocol servers, configs and packages"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
+license-files = ["LICENSE"]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "mcp-security",
+    "security-scanner",
+    "prompt-injection",
+    "static-analysis",
+    "supply-chain-security",
+]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
+]
 dependencies = [
     "anyio>=4.6",
     "jsonschema>=4.23",
@@ -25,6 +46,7 @@ Homepage = "https://github.com/ethanroubal/MCPiranha"
 Repository = "https://github.com/ethanroubal/MCPiranha"
 Issues = "https://github.com/ethanroubal/MCPiranha/issues"
 Documentation = "https://github.com/ethanroubal/MCPiranha/tree/main/docs"
+Changelog = "https://github.com/ethanroubal/MCPiranha/blob/main/CHANGELOG.md"
 
 [project.scripts]
 mcpiranha = "mcpiranha.cli:app"
@@ -58,7 +80,7 @@ packages = ["src/mcpiranha"]
 # The package and its docs only: the zoo (deliberately malicious samples), fixtures, tests and
 # calibration stay in the repository, where security tools expect them.
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/README.md", "/CHANGELOG.md"]
+include = ["/src", "/README.md", "/CHANGELOG.md", "/LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

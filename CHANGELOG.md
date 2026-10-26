@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Improve project discovery and onboarding with a focused MCP security scanner introduction,
+  a reproducible offline demo, package search metadata, the declared Apache-2.0 license text,
+  and a form for scan/installation feedback.
 - Gate PyPI publishing on the shared compatibility workflow: the same built wheel is checked
   on all six OS/Python combinations, with pinned vulnerable/fixed releases checked in CI.
   Extend installed CLI checks to config discovery, Windows APPDATA overrides and selection.

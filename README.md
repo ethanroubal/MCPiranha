@@ -1,19 +1,21 @@
-# MCPiranha
+# MCPiranha — MCP security scanner
 
 [![PyPI](https://img.shields.io/pypi/v/mcpiranha)](https://pypi.org/project/mcpiranha/)
 [![CI](https://github.com/ethanroubal/MCPiranha/actions/workflows/ci.yml/badge.svg)](https://github.com/ethanroubal/MCPiranha/actions/workflows/ci.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://github.com/ethanroubal/MCPiranha/blob/main/pyproject.toml)
+[![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/ethanroubal/MCPiranha/blob/main/LICENSE)
 
-Find security risks in **Model Context Protocol (MCP) servers** before giving them access to
-your files, credentials or other tools. MCPiranha scans client configurations, Python and
-JavaScript/TypeScript source, published packages, and live server metadata.
+MCPiranha is an **open-source MCP security scanner** for **Model Context Protocol** servers.
+Find prompt injection, tool poisoning, unsafe client configurations, vulnerable packages and
+risky Python/JavaScript/TypeScript code before giving servers access to your files and credentials.
+
+For developers building MCP servers and people using **Claude Desktop, Claude Code, Cursor,
+VS Code, Codex CLI** and [other MCP clients](https://github.com/ethanroubal/MCPiranha/blob/main/docs/CLIENTS.md).
 
 **Static scans do not start servers or run package code.** Live inspection and tool invocation
 are explicit opt-ins. Reports show both findings and what the scanner could actually inspect.
 
-See the [changelog](https://github.com/ethanroubal/MCPiranha/blob/main/CHANGELOG.md) for release history, upgrade notes and unreleased changes.
-
-[Quick start](#quick-start) · [Common tasks](#common-tasks) · [Reading results](#reading-results) ·
+[Quick start](#quick-start) · [Try the demo](#try-the-demo) · [Common tasks](#common-tasks) · [Reading results](#reading-results) ·
 [Limits](#limits) · [Full usage guide](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md)
 
 ## Quick start
@@ -21,14 +23,14 @@ See the [changelog](https://github.com/ethanroubal/MCPiranha/blob/main/CHANGELOG
 Requires **Python 3.12+** on Windows, macOS or Linux. Docker is needed for sandboxed local
 server connections, not static scans.
 
-```bash
-# Run without installing, using uv
-uvx mcpiranha scan .mcp.json
+Scan your configured MCP servers without starting them:
 
-# Or install the command
-pipx install mcpiranha
-mcpiranha scan .mcp.json
+```bash
+uvx mcpiranha scan --offline --no-lock
 ```
+
+Or point at a configuration: `uvx mcpiranha scan .mcp.json --offline --no-lock`.
+For a permanent installation, use `pipx install mcpiranha`, then `mcpiranha scan`.
 
 Use `mcpiranha --help` to list commands, or `mcpiranha scan --help` for scan options
 and short descriptions. Every command supports `--help`.
@@ -43,6 +45,26 @@ Claude Desktop/Code, Cursor, VS Code, Codex CLI and others on macOS, Linux and W
 
 Registry/advisory lookups use the network by default and send package names and versions to
 registries and OSV. Add **`--offline`** for local or saved evidence only.
+
+## Try the demo
+
+No MCP server required. Scan an inert snapshot containing tool-poisoning instructions:
+
+```bash
+git clone https://github.com/ethanroubal/MCPiranha.git
+cd MCPiranha
+uvx mcpiranha scan fixtures/metadata/poisoned-important/snapshots.json --offline --no-lock
+```
+
+Example findings (excerpt):
+
+```text
+HIGH  MCP-TP-005  Instructions involving credentials or sensitive files
+HIGH  MCP-TP-009  Parameter shaped to exfiltrate data
+```
+
+Exit code `1` means findings were detected. The sample is JSON data; the scanner does not read
+the credential files named in it. [Report a false alarm, missed detection or setup issue](https://github.com/ethanroubal/MCPiranha/issues/new/choose).
 
 ## Common tasks
 
@@ -90,11 +112,8 @@ dynamic tracing and invocation. Read it alongside the findings:
 | `skipped` | That stage did not run, such as tool listing during a static scan |
 | `failed` / `unknown` | The stage failed or its completeness cannot be established |
 
-Helper flows follow local import aliases, namespaces and common re-exports using a cached work
-queue. Unresolved local bindings or exhausted analysis/finding budgets mark source coverage
-**partial**, retaining findings and snapshot limitations. Completion does not establish that
-arbitrary dynamic calls, custom classes or validators were understood.
-`basename()` alone does not establish containment; use a checked path or filename allowlist.
+Unresolved local imports or exhausted analysis budgets mark source coverage **partial**.
+Completion does not establish that arbitrary dynamic calls, custom classes or validators were understood.
 
 ### Use in CI
 
@@ -141,6 +160,7 @@ Detection is bounded and heuristic. A clean report does not prove that a server 
 Novel paraphrases, unresolved/dynamic calls, arbitrary heap objects, custom validators,
 filesystem races and dormant runtime triggers remain gaps. Registry dependency resolution may
 differ from an installed environment; Docker image source is not analyzed.
+`basename()` alone does not establish containment; use a checked path or filename allowlist.
 
 The [labeled evaluation](https://github.com/ethanroubal/MCPiranha/blob/main/evaluation/README.md) records attacks, benign controls, misses, false
 alarms and implementation fingerprints. Its examples were used during development; passing
@@ -165,5 +185,8 @@ uv run pyright
 - [Rules](https://github.com/ethanroubal/MCPiranha/blob/main/docs/RULES.md) · [Client support](https://github.com/ethanroubal/MCPiranha/blob/main/docs/CLIENTS.md) · [Architecture](https://github.com/ethanroubal/MCPiranha/blob/main/docs/ARCHITECTURE.md)
 - [Changelog](https://github.com/ethanroubal/MCPiranha/blob/main/CHANGELOG.md) · [Adding rules](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md#adding-a-rule)
 
-The optional local classifier is experimental. The LLM layer, runtime guard proxy and MCP
-server mode are planned; see [classifier details](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md#experimental-classifier).
+The optional local classifier is [experimental](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md#experimental-classifier).
+
+Feedback from scans of real MCP servers helps improve detection. Share a **sanitized minimal
+example** through [GitHub issues](https://github.com/ethanroubal/MCPiranha/issues/new/choose), including
+your scanner version and what you expected. Licensed under [Apache-2.0](https://github.com/ethanroubal/MCPiranha/blob/main/LICENSE).
