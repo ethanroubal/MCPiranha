@@ -1,0 +1,47 @@
+name: Scan feedback or installation issue
+description: Report a false alarm, missed detection or problem getting started.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying MCPiranha. A small reproducible example helps us improve it.
+        Issues are public: remove tokens, private configuration and personal data before posting.
+        Do not post undisclosed security vulnerabilities here.
+  - type: dropdown
+    id: category
+    attributes:
+      label: What happened?
+      options:
+        - False positive (safe behavior flagged)
+        - Missed detection (unsafe behavior not flagged)
+        - Installation or compatibility problem
+        - Other problem
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: MCPiranha version
+      description: Run mcpiranha --version (or uvx mcpiranha --version).
+      placeholder: "0.4.0"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version and MCP client, if relevant.
+      placeholder: Windows 11, Python 3.13, Claude Desktop
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Include the command, rule ID or error message when available.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: A sanitized config/source snippet, or a public package name and pinned version.
+      render: text
