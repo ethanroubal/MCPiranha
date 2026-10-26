@@ -41,7 +41,8 @@ def artifact_uri(path: str, base: Path) -> str:
     p = Path(path).expanduser()
     foreign = PureWindowsPath(path)
     if sys.platform != "win32" and foreign.is_absolute():
-        return foreign.as_uri()
+        prefix = "file:" if foreign.drive.startswith("\\\\") else "file:///"
+        return prefix + quote(foreign.as_posix(), safe="/:")
     if not p.is_absolute() and not p.root and not p.drive:
         return quote(p.as_posix(), safe="/")
     try:

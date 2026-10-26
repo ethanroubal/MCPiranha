@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add native Windows CI on Python 3.12 and 3.13, including installed-wheel CLI checks for
+  Unicode/space paths, JSON/SARIF output, coverage requirements and detection exit codes.
+- Fix Windows stderr capture, full interpreter paths and `cmd.exe` launch wrappers;
+  exclude directory junctions from source traversal and encode SARIF artifact URIs correctly.
+- Keep frozen evaluation inputs identical across platforms and use explicit UTF-8 for
+  classifier configuration and generated runtime helpers.
+
 ## 0.4.0 — 2026-10-26
 
 Upgrade notes: unguarded based-path and URL-host flows now affect the default high-severity

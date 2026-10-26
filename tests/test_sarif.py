@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from mcpiranha import REPO_URL
 from mcpiranha.core.io import load_snapshots
 from mcpiranha.core.pipeline import scan
@@ -58,7 +60,18 @@ def test_space_and_unicode_paths_are_encoded_as_artifact_uris(tmp_path: Path) ->
     assert sarif.artifact_uri("source with spaces 測試/server.py", tmp_path) == expected
 
 
-def test_windows_snapshot_paths_remain_valid_uris_on_every_host(tmp_path: Path) -> None:
-    assert sarif.artifact_uri(r"C:\Users\alice\source with spaces\server.py", tmp_path).startswith(
-        "file:///C:/Users/alice/source%20with%20spaces/server.py"
-    )
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        (
+            r"C:\Users\alice\source with spaces\server.py",
+            "file:///C:/Users/alice/source%20with%20spaces/server.py",
+        ),
+        (r"C:\source\測試 #1.py", "file:///C:/source/%E6%B8%AC%E8%A9%A6%20%231.py"),
+        (r"\\server\share\source with spaces.py", "file://server/share/source%20with%20spaces.py"),
+    ],
+)
+def test_windows_snapshot_paths_remain_valid_uris_on_every_host(
+    tmp_path: Path, path: str, expected: str
+) -> None:
+    assert sarif.artifact_uri(path, tmp_path) == expected

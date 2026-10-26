@@ -18,7 +18,8 @@ See the [changelog](https://github.com/ethanroubal/MCPiranha/blob/main/CHANGELOG
 
 ## Quick start
 
-Requires **Python 3.12+**. Docker is needed for sandboxed local server connections, not static scans.
+Requires **Python 3.12+** on Windows, macOS or Linux. Docker is needed for sandboxed local
+server connections, not static scans.
 
 ```bash
 # Run without installing, using uv
@@ -31,6 +32,10 @@ mcpiranha scan .mcp.json
 
 Use `mcpiranha --help` to list commands, or `mcpiranha scan --help` for scan options
 and short descriptions. Every command supports `--help`.
+
+On Windows, the same commands work in PowerShell. Quote paths containing spaces:
+`mcpiranha scan "path:C:\Users\you\My Server" --offline`.
+Sandboxed connections and behavioral tracing require Docker Desktop using **Linux containers**.
 
 Without a target, `mcpiranha scan` discovers supported client configurations on your machine
 and in the current project. [Supported clients and config paths](https://github.com/ethanroubal/MCPiranha/blob/main/docs/CLIENTS.md) include
