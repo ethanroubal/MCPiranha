@@ -5,188 +5,65 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://github.com/ethanroubal/MCPiranha/blob/main/pyproject.toml)
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/ethanroubal/MCPiranha/blob/main/LICENSE)
 
-MCPiranha is an **open-source MCP security scanner** for **Model Context Protocol** servers.
-Find prompt injection, tool poisoning, unsafe client configurations, vulnerable packages and
-risky Python/JavaScript/TypeScript code before giving servers access to your files and credentials.
+An open-source security scanner for **Model Context Protocol (MCP)** servers. Find prompt
+injection, tool poisoning, unsafe configurations, vulnerable packages and risky source code.
 
-For developers building MCP servers and people using **Claude Desktop, Claude Code, Cursor,
-VS Code, Codex CLI** and [other MCP clients](https://github.com/ethanroubal/MCPiranha/blob/main/docs/CLIENTS.md).
+## Installation
 
-**Static scans do not start servers or run package code.** Live inspection and tool invocation
-are explicit opt-ins. Reports show both findings and what the scanner could actually inspect.
-
-[Quick start](#quick-start) · [Try the demo](#try-the-demo) · [Common tasks](#common-tasks) · [Reading results](#reading-results) ·
-[Limits](#limits) · [Full usage guide](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md)
-
-## Quick start
-
-Requires **Python 3.12+** on Windows, macOS or Linux. Docker is needed for sandboxed local
-server connections, not static scans.
-
-Scan your configured MCP servers without starting them:
+Requires **Python 3.12+**. Works on Windows, macOS and Linux.
 
 ```bash
-uvx mcpiranha scan --offline --no-lock
+pipx install mcpiranha
 ```
 
-Or point at a configuration: `uvx mcpiranha scan .mcp.json --offline --no-lock`.
-For a permanent installation, use `pipx install mcpiranha`, then `mcpiranha scan`.
+Or run without installing: `uvx mcpiranha scan`.
 
-Use `mcpiranha --help` to list commands, or `mcpiranha scan --help` for scan options
-and short descriptions. Every command supports `--help`.
-
-On Windows, the same commands work in PowerShell. Quote paths containing spaces:
-`mcpiranha scan "path:C:\Users\you\My Server" --offline`.
-Sandboxed connections and behavioral tracing require Docker Desktop using **Linux containers**.
-
-Without a target, `mcpiranha scan` discovers supported client configurations on your machine
-and in the current project. [Supported clients and config paths](https://github.com/ethanroubal/MCPiranha/blob/main/docs/CLIENTS.md) include
-Claude Desktop/Code, Cursor, VS Code, Codex CLI and others on macOS, Linux and Windows.
-
-Registry/advisory lookups use the network by default and send package names and versions to
-registries and OSV. Add **`--offline`** for local or saved evidence only.
-
-## Try the demo
-
-No MCP server required. Scan an inert snapshot containing tool-poisoning instructions:
+## Usage
 
 ```bash
-git clone https://github.com/ethanroubal/MCPiranha.git
-cd MCPiranha
-uvx mcpiranha scan fixtures/metadata/poisoned-important/snapshots.json --offline --no-lock
+# Discover and scan your configured MCP servers
+mcpiranha scan
+
+# Scan a configuration file
+mcpiranha scan .mcp.json
+
+# Scan one server from a configuration
+mcpiranha scan .mcp.json --server search
+
+# Scan local source without registry lookups
+mcpiranha scan path:./my-server --offline
+
+# Scan a published npm package without running it
+mcpiranha scan npm:@scope/server@1.2.3
+
+# Save a JSON report (use -f sarif for GitHub code scanning)
+mcpiranha scan .mcp.json -f json -o report.json
+
+# Show all scan options and descriptions
+mcpiranha scan --help
 ```
 
-Example findings (excerpt):
+Scans do not start servers by default. Add `--connect` to inspect a live server.
+Sandboxed local connections require Docker; on Windows, use Docker Desktop with Linux containers.
 
-```text
-HIGH  MCP-TP-005  Instructions involving credentials or sensitive files
-HIGH  MCP-TP-009  Parameter shaped to exfiltrate data
-```
+## Reading Results
 
-Exit code `1` means findings were detected. The sample is JSON data; the scanner does not read
-the credential files named in it. [Report a false alarm, missed detection or setup issue](https://github.com/ethanroubal/MCPiranha/issues/new/choose).
+Each finding shows its **severity**, **confidence**, **location**, **evidence** and a **suggested fix**.
+Severity describes potential impact; confidence describes certainty in the finding.
 
-## Common tasks
-
-| Task | Command |
-|---|---|
-| Scan a client configuration | `mcpiranha scan .mcp.json` |
-| Scan a source directory explicitly | `mcpiranha scan path:./server-source --offline` |
-| Inspect an npm release without installing it | `mcpiranha scan npm:@scope/server@1.2.3` |
-| Inspect a PyPI release without installing it | `mcpiranha scan pypi:some-server==1.2.3` |
-| Select one server from a config | `mcpiranha scan .mcp.json --server search` |
-| Inspect live tools, prompts and resources | `mcpiranha scan .mcp.json --server search --connect` |
-| Inspect risky combinations of servers | `mcpiranha flows .mcp.json` |
-| Export GitHub code-scanning results | `mcpiranha scan .mcp.json -f sarif -o scan.sarif` |
-
-`--server` selects an exact name or ID and can be repeated. Add `--client cursor` to narrow
-client discovery. Unmatched selectors fail before acquisition. Cross-server checks use only
-the selected servers; scan the whole configuration to assess their interactions.
-
-### What it checks
-
-| Area | Examples |
-|---|---|
-| Model-facing content | Prompt injection, hidden instructions, encoded payloads, secret-export links |
-| Source behavior | Shell/SQL injection, path traversal, SSRF, secret harvesting, persistence |
-| Client configuration | Embedded secrets, insecure endpoints, excessive approval settings |
-| Supply chain | Known vulnerabilities/malware, dependency risks, publisher/provenance changes |
-| Cross-server interactions | Untrusted content combined with private-data access or code execution |
-| Opt-in runtime behavior | Synthetic credential access, process activity and unexpected network destinations |
-
-See the [rule catalog](https://github.com/ethanroubal/MCPiranha/blob/main/docs/RULES.md) for individual checks and severity guidance.
-
-## Reading results
-
-A finding includes severity, confidence, evidence, location and remediation. **Severity is
-potential impact; confidence is certainty in the analysis.** A high-severity static finding
-can have medium confidence and still need review.
-
-Coverage is reported per server for configuration, tools, source, package/dependency checks,
-dynamic tracing and invocation. Read it alongside the findings:
-
-| Coverage status | Meaning |
-|---|---|
-| `completed` | Evidence was collected within the supported analysis model; not proof of safety |
-| `partial` | Some evidence or analysis was omitted; the report explains why |
-| `skipped` | That stage did not run, such as tool listing during a static scan |
-| `failed` / `unknown` | The stage failed or its completeness cannot be established |
-
-Unresolved local imports or exhausted analysis budgets mark source coverage **partial**.
-Completion does not establish that arbitrary dynamic calls, custom classes or validators were understood.
-
-### Use in CI
-
-```bash
-mcpiranha scan path:./server-source --offline --strict \
-  --require-coverage source --fail-on high -f json -o scan.json
-```
+Check coverage alongside findings: `completed` means the supported analysis completed,
+`partial` means some analysis was omitted, `skipped` means the check did not run, and
+`failed` / `unknown` means coverage could not be established.
 
 | Exit code | Meaning |
 |---|---|
-| `0` | No unsuppressed finding at or above the threshold; requested checks passed |
-| `1` | Findings meet the configured failure threshold |
-| `2` | Scan/input failure, a strict-mode warning, or an unmet coverage requirement |
+| `0` | No findings meet the failure threshold; requested checks passed |
+| `1` | Findings meet the failure threshold (high severity by default) |
+| `2` | Scan error, unmet coverage requirement or a warning with `--strict` |
 
-`--strict` fails on scan warnings, including partial source analysis. Repeat
-`--require-coverage` to require additional stages. Requirements apply to every selected server;
-a static scan cannot satisfy tool-listing coverage. Saved evidence can satisfy a coverage
-requirement but does not imply a fresh connection or lookup.
+Use `--fail-on medium` to fail on medium-severity findings too.
 
-Reviewed exceptions belong in [`.mcpiranha.yaml`](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md#policy-file), with a reason and
-optional expiration. Suppressed findings remain visible in JSON and SARIF.
-
-## Live inspection and change detection
-
-```bash
-# Start/list the selected server; no tool invocation
-mcpiranha scan .mcp.json --server search --connect --save-snapshots ./captures
-
-# Pin launch settings and tool definitions, then detect subsequent changes
-mcpiranha lock .mcp.json --connect
-mcpiranha verify .mcp.json --connect
-```
-
-Local package servers run in a Docker sandbox by default, with dummy credentials, a read-only
-filesystem and runtime networking disabled. Remote URLs require `--connect`; OAuth is available
-with `--oauth`. Tool calls require explicit `--invoke NAME` and can have side effects.
-
-For synthetic-credential tracing, bounded fuzzing, remote authentication and sandbox options,
-see the [usage guide](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md#behavioral-scanning-phase-04).
-
-## Limits
-
-Detection is bounded and heuristic. A clean report does not prove that a server is safe.
-Novel paraphrases, unresolved/dynamic calls, arbitrary heap objects, custom validators,
-filesystem races and dormant runtime triggers remain gaps. Registry dependency resolution may
-differ from an installed environment; Docker image source is not analyzed.
-`basename()` alone does not establish containment; use a checked path or filename allowlist.
-
-The [labeled evaluation](https://github.com/ethanroubal/MCPiranha/blob/main/evaluation/README.md) records attacks, benign controls, misses, false
-alarms and implementation fingerprints. Its examples were used during development; passing
-that set is not an independent estimate of real-world accuracy. Tests also cover two existing
-vulnerable/fixed release pairs. Broader independent validation remains necessary.
-
-## Development and documentation
-
-CI checks Windows, macOS and Linux, isolated wheel installations, and pinned vulnerable/fixed
-release pairs. Release tags must pass these checks before the tested artifacts reach PyPI.
-
-```bash
-uv sync --all-extras
-uv run pytest -q
-uv run ruff check .
-uv run pyright
-```
-
-- [Advanced usage and runtime scanning](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md)
-- [Testing and optional Docker/registry checks](https://github.com/ethanroubal/MCPiranha/blob/main/docs/TESTING.md)
-- [Detection-quality evaluation](https://github.com/ethanroubal/MCPiranha/blob/main/evaluation/README.md)
-- [Rules](https://github.com/ethanroubal/MCPiranha/blob/main/docs/RULES.md) · [Client support](https://github.com/ethanroubal/MCPiranha/blob/main/docs/CLIENTS.md) · [Architecture](https://github.com/ethanroubal/MCPiranha/blob/main/docs/ARCHITECTURE.md)
-- [Changelog](https://github.com/ethanroubal/MCPiranha/blob/main/CHANGELOG.md) · [Adding rules](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md#adding-a-rule)
-
-The optional local classifier is [experimental](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md#experimental-classifier).
-
-Feedback from scans of real MCP servers helps improve detection. Share a **sanitized minimal
-example** through [GitHub issues](https://github.com/ethanroubal/MCPiranha/issues/new/choose), including
-your scanner version and what you expected. Licensed under [Apache-2.0](https://github.com/ethanroubal/MCPiranha/blob/main/LICENSE).
+[Full usage guide](https://github.com/ethanroubal/MCPiranha/blob/main/docs/USAGE.md) ·
+[Rules](https://github.com/ethanroubal/MCPiranha/blob/main/docs/RULES.md) ·
+[Supported clients](https://github.com/ethanroubal/MCPiranha/blob/main/docs/CLIENTS.md) ·
+[Report an issue](https://github.com/ethanroubal/MCPiranha/issues/new/choose)
