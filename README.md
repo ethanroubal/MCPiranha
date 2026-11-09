@@ -4,6 +4,7 @@
 [![CI](https://github.com/ethanroubal/MCPiranha/actions/workflows/ci.yml/badge.svg)](https://github.com/ethanroubal/MCPiranha/actions/workflows/ci.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://github.com/ethanroubal/MCPiranha/blob/main/pyproject.toml)
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/ethanroubal/MCPiranha/blob/main/LICENSE)
+[![M8ven Score](https://m8ven.ai/badge/mcp/ethanroubal-mcp-server-security-scanner-29jg8z?v=a24f189550d01e667cb510cb5d4ff0ec)](https://m8ven.ai/mcp/ethanroubal-mcp-server-security-scanner-29jg8z?s=readme)
 
 An open-source security scanner for **Model Context Protocol (MCP)** servers. Find prompt
 injection, tool poisoning, unsafe configurations, vulnerable packages and risky source code.
